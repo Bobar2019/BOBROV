@@ -56,6 +56,8 @@ const App = (() => {
         // Démarrer l'OSD canvas vectoriel pour cockpit ET config OSD (aperçu en direct)
         if (tileId === 'cockpit' || tileId === 'config-osd') {
             if (typeof Telemetry !== 'undefined') Telemetry.startOSD();
+            // Initialiser le module Rov3D (Three.js) si disponible
+            if (typeof Rov3D !== 'undefined' && Rov3D.init) Rov3D.init();
         } else {
             if (typeof Telemetry !== 'undefined') Telemetry.stopOSD();
         }

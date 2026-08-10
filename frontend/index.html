@@ -8,6 +8,15 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/gamepad.css">
     <link rel="stylesheet" href="css/goggle.css">
+    <!-- Three.js via importmap pour le rendu 3D filaire du ROV -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+        }
+    }
+    </script>
     <link rel="stylesheet" href="css/gamepad-nav.css">
 </head>
 <body class="theme-night">
@@ -327,6 +336,9 @@
                             </div>
                             <div class="section-body">
                                 <div class="gamepad-status"><span id="gp-status">🎮 Manette: non connectée</span></div>
+                                <label class="toggle-label" style="margin:4px 0 8px 2px;font-size:11px;cursor:pointer;">
+                                    <input type="checkbox" id="cfg-test-gamepad"> Test manette (Rov3D)
+                                </label>
                                 <div class="esp32-status"><span id="esp32-status" class="esp32-badge disconnected">🔌 ESP32: —</span></div>
                                 <div class="esp32-status"><span id="gy91-status" class="esp32-badge disconnected">🧭 IMU: —</span></div>
                                 <div class="rov-status-indicator">
@@ -413,6 +425,7 @@
                         <label class="toggle-label"><input type="checkbox" id="cfg-show-compass" checked> Cap / Boussole</label>
                         <label class="toggle-label"><input type="checkbox" id="cfg-show-fps" checked> FPS</label>
                         <label class="toggle-label"><input type="checkbox" id="cfg-show-motors" checked> Propulseurs</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-rov3d" checked> Rov3D (modèle filaire)</label>
                     </div>
                     <div class="config-card">
                         <h3>Couleurs</h3>
@@ -433,6 +446,7 @@
                         <label>Transparence Cap <input type="range" id="cfg-compass-opacity" min="10" max="100" value="100"><span id="compass-opacity-val">100%</span></label>
                         <label>Transparence Batterie <input type="range" id="cfg-battery-opacity" min="10" max="100" value="100"><span id="battery-opacity-val">100%</span></label>
                         <label>Transparence Propulseurs <input type="range" id="cfg-motors-opacity" min="10" max="100" value="100"><span id="motors-opacity-val">100%</span></label>
+                        <label>Transparence Rov3D <input type="range" id="cfg-rov3d-opacity" min="10" max="100" value="100"><span id="rov3d-opacity-val">100%</span></label>
                         <label>Taille police <input type="range" id="cfg-font-scale" min="0.4" max="1.5" step="0.1" value="0.8"><span id="font-scale-value">0.8</span></label>
                     </div>
                     <div class="config-card">
@@ -460,6 +474,16 @@
                         <label>Boussole Y <input type="number" id="cfg-compass-y" min="0" max="100" value="92"></label>
                         <label>Batterie X <input type="number" id="cfg-battery-x" min="0" max="100" value="88"></label>
                         <label>Batterie Y <input type="number" id="cfg-battery-y" min="0" max="100" value="12"></label>
+                    </div>
+                    <div class="config-card">
+                        <h3>Modèle 3D Rov3D</h3>
+                        <p class="hint">Téléversez un fichier .glb pour remplacer le modèle 3D filaire affiché dans l'OSD.</p>
+                        <label class="upload-label">
+                            Fichier .glb :
+                            <input type="file" id="cfg-rov3d-file" accept=".glb,.gltf">
+                        </label>
+                        <button id="btn-rov3d-upload" class="btn-secondary" style="margin-top:6px;">Importer le modèle</button>
+                        <span id="rov3d-upload-status" style="font-size:0.85em;margin-left:8px;"></span>
                     </div>
                 </div>
                 <div class="config-actions">
@@ -888,5 +912,10 @@
     <script src="js/action_status.js"></script>
     <script src="js/goggle.js"></script>
     <script src="js/wifi.js"></script>
+<!-- Module ES Rov3D (Three.js) -->
+<script type="module">
+    import { initRov3D, updateAttitude, reloadModel, setVisible, setColor, getCanvas, getRenderSize, uploadModel, updateOpacity, setHeaveOffset, setSurgeOffset } from './js/rov3d.js?v=5';
+    window.Rov3D = { init: initRov3D, updateAttitude, reloadModel, setVisible, setColor, getCanvas, getRenderSize, uploadModel, updateOpacity, setHeaveOffset, setSurgeOffset };
+</script>
 </body>
 </html>

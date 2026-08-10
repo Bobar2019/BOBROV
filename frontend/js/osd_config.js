@@ -21,12 +21,13 @@ const OSDConfig = (() => {
     const DEFAULTS = {
         show_horizon: true, show_depth: true, show_temperature: true,
         show_battery: true, show_compass: true, show_fps: true, show_motors: true,
+        show_rov3d: true,
         horizon_color: '#00FF88', depth_color: '#00AAFF', temperature_color: '#FFAA00',
         compass_color: '#FFFFFF', battery_color: '#00CC44', fps_color: '#FFFFFF',
         primary_color: '#00FF00', font_scale: 0.8, opacity: 100,
         depth_opacity: 100, temperature_opacity: 100,
         compass_opacity: 100, battery_opacity: 100, motors_opacity: 100,
-        horizon_opacity: 100,
+        horizon_opacity: 100, rov3d_opacity: 100,
         horizon_x: 50, horizon_y: 50, depth_x: 3, depth_y: 15,
         temperature_x: 88, temperature_y: 5, compass_x: 50, compass_y: 92,
         battery_x: 88, battery_y: 12, fps_x: 2, fps_y: 96,
@@ -62,7 +63,8 @@ const OSDConfig = (() => {
             { id: 'cfg-temperature-opacity', valId: 'temperature-opacity-val', key: 'temperature_opacity' },
             { id: 'cfg-compass-opacity',     valId: 'compass-opacity-val',     key: 'compass_opacity' },
             { id: 'cfg-battery-opacity',     valId: 'battery-opacity-val',     key: 'battery_opacity' },
-            { id: 'cfg-motors-opacity',      valId: 'motors-opacity-val',      key: 'motors_opacity' }
+            { id: 'cfg-motors-opacity',      valId: 'motors-opacity-val',      key: 'motors_opacity' },
+            { id: 'cfg-rov3d-opacity',       valId: 'rov3d-opacity-val',       key: 'rov3d_opacity' }
         ];
         elemOpacitySliders.forEach(({ id, valId, key }) => {
             const slider = document.getElementById(id);
@@ -129,7 +131,7 @@ const OSDConfig = (() => {
         }
 
         // Checkboxes : appliquer en direct
-        ['show_horizon', 'show_depth', 'show_temperature', 'show_battery', 'show_compass', 'show_fps', 'show_motors'].forEach(key => {
+        ['show_horizon', 'show_depth', 'show_temperature', 'show_battery', 'show_compass', 'show_fps', 'show_motors', 'show_rov3d'].forEach(key => {
             const el = document.getElementById(`cfg-${key.replace('_', '-')}`);
             if (el) {
                 el.addEventListener('change', () => {
@@ -159,6 +161,37 @@ const OSDConfig = (() => {
                 });
             }
         });
+
+        // Upload modèle 3D Rov3D
+        const btnUpload = document.getElementById('btn-rov3d-upload');
+        if (btnUpload) {
+            btnUpload.addEventListener('click', async () => {
+                const fileInput = document.getElementById('cfg-rov3d-file');
+                const statusEl = document.getElementById('rov3d-upload-status');
+                if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+                    if (statusEl) { statusEl.textContent = '⚠ Aucun fichier sélectionné'; statusEl.style.color = '#FF4444'; }
+                    return;
+                }
+                const file = fileInput.files[0];
+                if (statusEl) { statusEl.textContent = '⏳ Envoi en cours...'; statusEl.style.color = '#FFAA00'; }
+                try {
+                    if (window.Rov3D && window.Rov3D.uploadModel) {
+                        await window.Rov3D.uploadModel(file);
+                    } else {
+                        // Fallback si le module n'est pas encore chargé
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        const resp = await fetch('/api/rov3d/upload', { method: 'POST', body: formData });
+                        if (!resp.ok) throw new Error(`Erreur ${resp.status}`);
+                    }
+                    if (statusEl) { statusEl.textContent = '✔ Modèle importé !'; statusEl.style.color = '#44FF44'; }
+                    fileInput.value = '';
+                } catch (err) {
+                    console.error('[Rov3D] Upload error:', err);
+                    if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = '#FF4444'; }
+                }
+            });
+        }
 
         // Charger la config actuelle
         load();
@@ -206,6 +239,7 @@ const OSDConfig = (() => {
                 App.setCheckbox('cfg-show-compass', _toBool(osd.show_compass));
                 App.setCheckbox('cfg-show-fps', _toBool(osd.show_fps));
                 App.setCheckbox('cfg-show-motors', _toBool(osd.show_motors !== undefined ? osd.show_motors : true));
+                App.setCheckbox('cfg-show-rov3d', _toBool(osd.show_rov3d !== undefined ? osd.show_rov3d : true));
 
                 // Couleurs
                 setColor('cfg-horizon-color', osd.horizon_color);
@@ -227,6 +261,7 @@ const OSDConfig = (() => {
                 _setSlider('cfg-compass-opacity',     osd.compass_opacity || 100,     'compass-opacity-val',     '%');
                 _setSlider('cfg-battery-opacity',     osd.battery_opacity || 100,     'battery-opacity-val',     '%');
                 _setSlider('cfg-motors-opacity',      osd.motors_opacity || 100,      'motors-opacity-val',      '%');
+                _setSlider('cfg-rov3d-opacity',       osd.rov3d_opacity || 100,       'rov3d-opacity-val',       '%');
 
                 const fontScale = document.getElementById('cfg-font-scale');
                 if (fontScale) { fontScale.value = osd.font_scale || 0.8; document.getElementById('font-scale-value').textContent = fontScale.value; }
@@ -274,6 +309,7 @@ const OSDConfig = (() => {
             show_compass: App.getCheckbox('cfg-show-compass'),
             show_fps: App.getCheckbox('cfg-show-fps'),
             show_motors: App.getCheckbox('cfg-show-motors'),
+            show_rov3d: App.getCheckbox('cfg-show-rov3d'),
             horizon_color: getColor('cfg-horizon-color'),
             depth_color: getColor('cfg-depth-color'),
             temperature_color: getColor('cfg-temperature-color'),
@@ -288,6 +324,7 @@ const OSDConfig = (() => {
             compass_opacity: parseInt(document.getElementById('cfg-compass-opacity')?.value || '100'),
             battery_opacity: parseInt(document.getElementById('cfg-battery-opacity')?.value || '100'),
             motors_opacity: parseInt(document.getElementById('cfg-motors-opacity')?.value || '100'),
+            rov3d_opacity: parseInt(document.getElementById('cfg-rov3d-opacity')?.value || '100'),
             font_scale: parseFloat(document.getElementById('cfg-font-scale')?.value || '0.8'),
             horizon_line_thick: parseFloat(document.getElementById('cfg-horizon-line-thick')?.value || '2'),
             horizon_circle_opacity: parseInt(document.getElementById('cfg-horizon-circle-opacity')?.value || '15'),
@@ -336,6 +373,7 @@ const OSDConfig = (() => {
         App.setCheckbox('cfg-show-compass', true);
         App.setCheckbox('cfg-show-fps', true);
         App.setCheckbox('cfg-show-motors', true);
+        App.setCheckbox('cfg-show-rov3d', true);
 
         setColor('cfg-horizon-color', DEFAULTS.horizon_color);
         setColor('cfg-depth-color', DEFAULTS.depth_color);
@@ -354,6 +392,7 @@ const OSDConfig = (() => {
         _setSlider('cfg-compass-opacity', 100, 'compass-opacity-val', '%');
         _setSlider('cfg-battery-opacity', 100, 'battery-opacity-val', '%');
         _setSlider('cfg-motors-opacity', 100, 'motors-opacity-val', '%');
+        _setSlider('cfg-rov3d-opacity', 100, 'rov3d-opacity-val', '%');
 
         const fontScale = document.getElementById('cfg-font-scale');
         if (fontScale) { fontScale.value = 0.8; document.getElementById('font-scale-value').textContent = '0.8'; }

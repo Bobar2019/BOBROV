@@ -491,6 +491,9 @@ select:focus, input:focus, textarea:focus { border-color: var(--accent-blue); }
 textarea { resize: vertical; font-family: var(--font-mono); font-size: 11px; }
 input[type="color"] { width: 44px; height: 26px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-input); cursor: pointer; }
 .hint { font-size: 11px; color: var(--text-secondary); font-style: italic; margin-bottom: 6px; }
+.upload-label { flex-direction: row !important; align-items: center; gap: 8px !important; }
+.upload-label input[type="file"] { font-size: 11px; color: var(--text-secondary); }
+#rov3d-upload-status { transition: color 0.3s; }
 .config-actions { display: flex; gap: 10px; padding-top: 6px; }
 
 /* === SIMULATION — Éditeur en liste === */

@@ -3,7 +3,7 @@ Serveur FastAPI pour Cockpit-Lite ROV.
 API REST, WebSockets temps réel, diffusion MJPEG et interface web.
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response, Request, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response, Request, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -1486,6 +1486,36 @@ class WebServer:
                 return "Incompatibilité sécurité Wi-Fi (WPA2/WPA3)"
             # Retourner l'erreur brute tronquée si aucun cas ne correspond
             return raw_err[:200]
+
+        # === UPLOAD MODÈLE 3D ROV (.glb) ===
+        @self.app.post("/api/rov3d/upload")
+        async def upload_rov3d_model(file: UploadFile = File(...)):
+            """Téléverse un nouveau modèle .glb pour le rendu Rov3D filaire"""
+            # Validation extension
+            if not file.filename or not file.filename.lower().endswith(('.glb', '.gltf')):
+                raise HTTPException(status_code=400, detail="Seuls les fichiers .glb ou .gltf sont acceptés")
+
+            # Validation taille (max 50 Mo)
+            MAX_SIZE = 50 * 1024 * 1024
+            content = await file.read()
+            if len(content) > MAX_SIZE:
+                raise HTTPException(status_code=413, detail="Fichier trop volumineux (max 50 Mo)")
+
+            # Sauvegarde
+            models_dir = Path("static/models")
+            models_dir.mkdir(parents=True, exist_ok=True)
+            dest_path = models_dir / "bob_rov_3D.glb"
+
+            with open(dest_path, "wb") as f:
+                f.write(content)
+
+            logger.info(f"Modèle 3D téléversé: {file.filename} ({len(content)} octets)")
+            return {
+                "success": True,
+                "filename": file.filename,
+                "size": len(content),
+                "path": str(dest_path)
+            }
 
     def _convert_instructions_to_steps(self, instructions: list) -> list:
         """

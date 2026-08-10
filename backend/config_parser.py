@@ -107,7 +107,9 @@ class ConfigParser:
                 "horizon_clip": False,
                 "horizon_damping": 5,
                 "show_motors": True,
-                "motors_opacity": 100
+                "show_rov3d": True,
+                "motors_opacity": 100,
+                "rov3d_opacity": 100
             },
             "ROV_CONTROL": {
                 "max_thrust": 100,

@@ -38,12 +38,13 @@ const Telemetry = (() => {
     let osdConfig = {
         show_horizon: true, show_depth: true, show_temperature: true,
         show_battery: true, show_compass: true, show_fps: true, show_motors: true,
+        show_rov3d: true,
         horizon_color: '#00FF88', depth_color: '#00AAFF', temperature_color: '#FFAA00',
         compass_color: '#FFFFFF', battery_color: '#00CC44', fps_color: '#FFFFFF',
         primary_color: '#00FF00', font_scale: 0.8, opacity: 100,
         depth_opacity: 100, temperature_opacity: 100,
         compass_opacity: 100, battery_opacity: 100, motors_opacity: 100,
-        horizon_opacity: 100,
+        horizon_opacity: 100, rov3d_opacity: 100,
         horizon_x: 50, horizon_y: 50, depth_x: 3, depth_y: 15,
         temperature_x: 88, temperature_y: 5, compass_x: 50, compass_y: 92,
         battery_x: 88, battery_y: 12, fps_x: 2, fps_y: 96,
@@ -169,7 +170,7 @@ const Telemetry = (() => {
             const osd = config.OSD_DISPLAY || {};
             // Champs booléens à convertir strictement
             const boolKeys = ['show_horizon', 'show_depth', 'show_temperature', 'show_battery',
-                              'show_compass', 'show_fps', 'show_motors',
+                              'show_compass', 'show_fps', 'show_motors', 'show_rov3d',
                               'horizon_show_text', 'horizon_clip'];
             Object.keys(osdConfig).forEach(key => {
                 if (osd[key] !== undefined) {
@@ -186,7 +187,7 @@ const Telemetry = (() => {
     function updateOSDConfig(newConfig) {
         // Conversion booléenne robuste pour les champs concernés
         const boolKeys = ['show_horizon', 'show_depth', 'show_temperature', 'show_battery',
-                          'show_compass', 'show_fps', 'show_motors',
+                          'show_compass', 'show_fps', 'show_motors', 'show_rov3d',
                           'horizon_show_text', 'horizon_clip'];
         for (const key of boolKeys) {
             if (newConfig[key] !== undefined) {
@@ -402,7 +403,7 @@ const Telemetry = (() => {
 
         // Pré-calcul du filtre "bain d'huile" (une seule fois, indépendant du canvas)
         let fRoll = 0, fPitch = 0;
-        if (osdConfig.show_horizon) {
+        if (osdConfig.show_horizon || osdConfig.show_rov3d) {
             const damping = osdConfig.horizon_damping != null ? osdConfig.horizon_damping : 5;
             const alpha = 1.0 / (0.5 + damping * 0.45);
             const r = _applyOilBathFilter(data.roll,  _filter.roll1,  _filter.roll2,  alpha);
@@ -411,6 +412,21 @@ const Telemetry = (() => {
             _filter.pitch1 = p.pass1; _filter.pitch2 = p.pass2;
             fRoll  = Math.abs(_filter.roll2)  < 0.1 ? 0 : _filter.roll2;
             fPitch = Math.abs(_filter.pitch2) < 0.1 ? 0 : _filter.pitch2;
+        }
+
+        // Mettre à jour l'attitude du modèle 3D (roulis/tangage/cap filtrés)
+        // — ignoré en mode Test manette (le gamepad pilote directement Rov3D)
+        if (window.Rov3D) {
+            const testMode = typeof Gamepad !== 'undefined' && Gamepad.isTestMode && Gamepad.isTestMode();
+            if (!testMode) {
+                window.Rov3D.updateAttitude(fRoll, fPitch, data.heading || 0);
+                if (window.Rov3D.setHeaveOffset) window.Rov3D.setHeaveOffset(0);
+                if (window.Rov3D.setSurgeOffset) window.Rov3D.setSurgeOffset(0);
+            }
+            window.Rov3D.setVisible(osdConfig.show_rov3d);
+            if (window.Rov3D.updateOpacity) {
+                window.Rov3D.updateOpacity(osdConfig.rov3d_opacity);
+            }
         }
 
         // Dessiner sur CHAQUE canvas OSD visible (cockpit + aperçu config)
@@ -486,10 +502,34 @@ const Telemetry = (() => {
                 drawMotors(ctx, w, h, data.motors, scale, fontSize);
             }
 
+            // 10. Rov3D (modèle filaire)
+            if (osdConfig.show_rov3d && window.Rov3D) {
+                ctx.globalAlpha = elemAlpha(osdConfig.rov3d_opacity);
+                _compositeRov3D(ctx, w, h, scale);
+            }
+
             ctx.globalAlpha = 1;
         });
 
         osdAnimFrame = requestAnimationFrame(renderOSD);
+    }
+
+    // ==========================================================
+    // COMPOSITING ROV3D (canvas WebGL → canvas OSD)
+    // ==========================================================
+    function _compositeRov3D(ctx, w, h, scale) {
+        if (!window.Rov3D) return;
+        const rovCanvas = window.Rov3D.getCanvas();
+        if (!rovCanvas) return;
+
+        // Taille : ~30% de la largeur du canvas OSD
+        const size = Math.round(Math.min(w, h) * 0.3);
+        // Position : coin bas-droite avec marge
+        const margin = 10;
+        const drawX = w - size - margin;
+        const drawY = h - size - margin;
+
+        ctx.drawImage(rovCanvas, drawX, drawY, size, size);
     }
 
     function drawText(ctx, x, y, text, color, fontSize, align) {

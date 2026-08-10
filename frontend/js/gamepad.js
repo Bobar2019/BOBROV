@@ -78,6 +78,77 @@ const Gamepad = (() => {
     let _autoDetectAttempts = 0;
     const AUTO_DETECT_MAX_ATTEMPTS = 60; // arrêter après 60s sans résultat
 
+    // ==========================================================
+    // MODE TEST MANETTE — pilote le Rov3D OSD avec les sticks
+    // ==========================================================
+    let _testMode = false;
+    let _testRoll = 0, _testPitch = 0, _testYaw = 0, _testY = 0, _testZ = 0;
+    const TEST_LERP = 0.08;           // facteur de lissage (0=inertie max, 1=instantané)
+    const TEST_DEADZONE = 0.15;       // zone morte sticks mode test
+    const TEST_MAX_ANGLE = 45;        // amplitude max pitch/roll en degrés
+    const TEST_YAW_SPEED = 90;        // vitesse max yaw en °/s
+    const TEST_MAX_HEAVE = 0.5;       // translation verticale max (unités Three.js)
+    const TEST_HEAVE_SPEED = 1.5;     // vitesse max heave en unités/s
+    const TEST_MAX_SURGE = 1.0;       // translation avant/arrière max
+    const TEST_SURGE_SPEED = 2.0;     // vitesse max surge en unités/s
+
+    // ==========================================================
+    // Lecture unifiée d'un degré de liberté (axes + boutons)
+    // Se base sur le profil actif : axisFunctionMap ET buttonFunctionMap.
+    // ==========================================================
+    function _readDofInput(gp, dofName) {
+        // Alias de fonctions par degré de liberté (axes ET boutons)
+        const DOF_FUNCS = {
+            yaw:   { axis: ['yaw', 'turn', 'heading', 'rotate'],
+                     pos:  ['turn_right', 'yaw_right'],
+                     neg:  ['turn_left', 'yaw_left'] },
+            pitch: { axis: ['pitch', 'surge', 'forward', 'forward_backward',
+                            'move_forward', 'move_backward'],
+                     pos:  ['pitch_up', 'move_forward', 'surge_fwd'],
+                     neg:  ['pitch_down', 'move_backward', 'surge_bwd'] },
+            roll:  { axis: ['roll'],
+                     pos:  ['roll_right'],
+                     neg:  ['roll_left'] },
+            heave: { axis: ['heave', 'vertical', 'move_up', 'move_down', 'depth', 'up_down'],
+                     pos:  ['move_up', 'ascent', 'heave_up'],
+                     neg:  ['move_down', 'descent', 'heave_down'] },
+            surge: { axis: ['surge', 'forward', 'forward_backward',
+                            'move_forward', 'move_backward'],
+                     pos:  ['move_forward', 'surge_fwd'],
+                     neg:  ['move_backward', 'surge_bwd'] }
+        };
+        const cfg = DOF_FUNCS[dofName];
+        if (!cfg) return 0;
+
+        let val = 0;
+
+        // 1. Axes : chercher dans axisFunctionMap
+        for (const [idxStr, mapping] of Object.entries(axisFunctionMap)) {
+            if (!cfg.axis.includes(mapping.function)) continue;
+            const idx = parseInt(idxStr);
+            if (idx >= gp.axes.length) continue;
+            let v = gp.axes[idx] || 0;
+            if (mapping.invert) v = -v;
+            if (Math.abs(v) < TEST_DEADZONE) v = 0;
+            val = v;
+            break;
+        }
+
+        // 2. Boutons : chercher dans buttonFunctionMap (DPAD, L1/R1, etc.)
+        let btnVal = 0;
+        for (const [idxStr, bCfg] of Object.entries(buttonFunctionMap)) {
+            if (!bCfg || !bCfg.function) continue;
+            const idx = parseInt(idxStr);
+            if (idx >= gp.buttons.length || !gp.buttons[idx].pressed) continue;
+            if (cfg.pos.includes(bCfg.function)) btnVal += 1;
+            else if (cfg.neg.includes(bCfg.function)) btnVal -= 1;
+        }
+        // Les boutons ont priorité sur les axes (entrée explicite utilisateur)
+        if (btnVal !== 0) val = btnVal;
+
+        return Math.max(-1, Math.min(1, val));
+    }
+
     // Noms des boutons par index (standard gamepad)
     const INDEX_TO_BUTTON_NAME = {
         0: 'CROSS', 1: 'CIRCLE', 2: 'SQUARE', 3: 'TRIANGLE',
@@ -154,26 +225,20 @@ const Gamepad = (() => {
     }
 
     // ----------------------------------------------------------
-    // POLLING AUTO-DÉTECTION (fallback)
-    // Tente scanForGamepads() toutes les secondes pour attraper
-    // les manettes connectées entre-temps ou après un changement
-    // d'onglet. S'arrête après AUTO_DETECT_MAX_ATTEMPTS ou dès
-    // qu'une manette est trouvée.
+    // POLLING AUTO-DÉTECTION (fallback continu)
+    // Tente scanForGamepads() toutes les secondes en permanence
+    // pour attraper les manettes connectées à tout moment.
+    // S'arrête dès qu'une manette est trouvée, redémarre à
+    // chaque déconnexion ou activation du Cockpit.
     // ----------------------------------------------------------
     function startAutoDetect() {
         if (_autoDetectTimer) return;
-        _autoDetectAttempts = 0;
         _autoDetectTimer = setInterval(() => {
-            _autoDetectAttempts++;
             if (connected) {
                 stopAutoDetect();
                 return;
             }
             scanForGamepads();
-            if (_autoDetectAttempts >= AUTO_DETECT_MAX_ATTEMPTS) {
-                console.log('[Gamepad] Auto-détection: arrêt après', AUTO_DETECT_MAX_ATTEMPTS, 'tentatives');
-                stopAutoDetect();
-            }
         }, AUTO_DETECT_INTERVAL);
     }
 
@@ -190,17 +255,96 @@ const Gamepad = (() => {
     // ----------------------------------------------------------
     function onCockpitActivate() {
         console.log('[Gamepad] Activation Cockpit — scan immédiat');
-        // Recharger le mapping actif (au cas où changé dans l'onglet config)
         loadActiveProfile();
-        // Si pas encore connecté, scanner activement
         if (!connected) {
             scanForGamepads();
-            // Relancer l'auto-détection si elle était arrêtée
             if (!connected) startAutoDetect();
         } else {
-            // Déjà connecté : s'assurer que le polling de lecture tourne
             startPolling();
         }
+        // Attacher le listener Test manette
+        const cb = document.getElementById('cfg-test-gamepad');
+        if (cb) {
+            cb.onchange = () => setTestMode(cb.checked);
+            // Synchroniser l'état si la checkbox était déjà cochée
+            if (cb.checked && !_testMode) setTestMode(true);
+        }
+    }
+
+    // ==========================================================
+    // MODE TEST MANETTE — implémentation
+    // ==========================================================
+    function _processTestMode(gp) {
+        // === YAW (rotation continue, accumulateur) ===
+        const yawInput = _readDofInput(gp, 'yaw');
+        _testYaw += yawInput * TEST_YAW_SPEED / 60;
+        if (_testYaw > 180) _testYaw -= 360;
+        if (_testYaw < -180) _testYaw += 360;
+
+        // === PITCH (lerp vers cible) ===
+        const pitchInput = _readDofInput(gp, 'pitch');
+        const pitchTarget = pitchInput * TEST_MAX_ANGLE;
+        _testPitch += (pitchTarget - _testPitch) * TEST_LERP;
+
+        // === ROLL (lerp vers cible) ===
+        const rollInput = _readDofInput(gp, 'roll');
+        const rollTarget = rollInput * TEST_MAX_ANGLE;
+        _testRoll += (rollTarget - _testRoll) * TEST_LERP;
+
+        // === HEAVE — translation verticale (accumulateur borné + decay) ===
+        const heaveInput = _readDofInput(gp, 'heave');
+        _testY += heaveInput * TEST_HEAVE_SPEED / 60;
+        _testY = Math.max(-TEST_MAX_HEAVE, Math.min(TEST_MAX_HEAVE, _testY));
+        if (Math.abs(heaveInput) < 0.05) {
+            _testY *= 0.97;
+            if (Math.abs(_testY) < 0.005) _testY = 0;
+        }
+
+        // === SURGE — translation avant/arrière (accumulateur borné + decay) ===
+        const surgeInput = _readDofInput(gp, 'surge');
+        _testZ -= surgeInput * TEST_SURGE_SPEED / 60;  // -Z = avant en Three.js
+        _testZ = Math.max(-TEST_MAX_SURGE, Math.min(TEST_MAX_SURGE, _testZ));
+        if (Math.abs(surgeInput) < 0.05) {
+            _testZ *= 0.97;
+            if (Math.abs(_testZ) < 0.005) _testZ = 0;
+        }
+        if (Math.abs(_testZ) > 0.01) {
+            console.log(`[Gamepad Test] surge: input=${surgeInput.toFixed(2)} z=${_testZ.toFixed(3)}`);
+        }
+
+        // === Envoi au module Rov3D ===
+        if (typeof Rov3D !== 'undefined') {
+            if (Rov3D.updateAttitude) {
+                // Convention telemetry.js : updateAttitude(rollDeg=pitch, pitchDeg=roll, yawDeg=yaw)
+                Rov3D.updateAttitude(_testPitch, _testRoll, _testYaw);
+            }
+            if (Rov3D.setHeaveOffset) {
+                Rov3D.setHeaveOffset(_testY);
+            }
+            if (Rov3D.setSurgeOffset) {
+                Rov3D.setSurgeOffset(_testZ);
+            }
+        }
+    }
+
+    function setTestMode(enabled) {
+        _testMode = enabled;
+        if (!enabled) {
+            _testRoll = 0;
+            _testPitch = 0;
+            _testYaw = 0;
+            _testY = 0;
+            _testZ = 0;
+            if (typeof Rov3D !== 'undefined') {
+                if (Rov3D.setHeaveOffset) Rov3D.setHeaveOffset(0);
+                if (Rov3D.setSurgeOffset) Rov3D.setSurgeOffset(0);
+            }
+        }
+        console.log(`[Gamepad] Mode test manette: ${enabled ? 'ACTIVÉ' : 'désactivé'}`);
+    }
+
+    function isTestMode() {
+        return _testMode;
     }
 
     function onGamepadConnected(event) {
@@ -273,10 +417,16 @@ const Gamepad = (() => {
             if (typeof GamepadNav !== 'undefined') {
                 GamepadNav.processNavigation(gp);
             }
-            // Mettre à jour l'état des boutons pour éviter les faux fronts au retour en mode ROV
             for (let i = 0; i < gp.buttons.length; i++) {
                 prevButtons[i] = gp.buttons[i].pressed;
             }
+            pollTimer = requestAnimationFrame(pollLoop);
+            return;
+        }
+
+        // Mode Test manette : pilotage Rov3D OSD par les sticks
+        if (_testMode) {
+            _processTestMode(gp);
             pollTimer = requestAnimationFrame(pollLoop);
             return;
         }
@@ -845,7 +995,9 @@ const Gamepad = (() => {
         applyProfileMapping,
         reloadMapping: loadActiveProfile,
         onCockpitActivate,
-        scanForGamepads
+        scanForGamepads,
+        setTestMode,
+        isTestMode
     };
 
 })();
