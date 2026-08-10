@@ -20,8 +20,8 @@ const Telemetry = (() => {
     let osdPreviewLastW = 0;       // Dernières dimensions du buffer aperçu config
     let osdPreviewLastH = 0;
 
-    // Liste des canvas OSD actifs (cockpit + aperçu config OSD)
-    const OSD_CANVAS_IDS = ['osd-canvas', 'osd-preview-canvas'];
+    // Liste des canvas OSD actifs (cockpit + aperçu config OSD + lunettes)
+    const OSD_CANVAS_IDS = ['osd-canvas', 'osd-preview-canvas', 'goggle-osd-canvas'];
 
     // Données temps réel
     let data = {
@@ -38,19 +38,28 @@ const Telemetry = (() => {
     let osdConfig = {
         show_horizon: true, show_depth: true, show_temperature: true,
         show_battery: true, show_compass: true, show_fps: true, show_motors: true,
-        show_rov3d: true,
+        show_rov3d: true, show_clock: true, show_armed: true,
+        show_gamepad_battery: true, show_display_mode: true,
         horizon_color: '#00FF88', depth_color: '#00AAFF', temperature_color: '#FFAA00',
         compass_color: '#FFFFFF', battery_color: '#00CC44', fps_color: '#FFFFFF',
         primary_color: '#00FF00', font_scale: 0.8, opacity: 100,
         depth_opacity: 100, temperature_opacity: 100,
         compass_opacity: 100, battery_opacity: 100, motors_opacity: 100,
         horizon_opacity: 100, rov3d_opacity: 100,
+        fps_opacity: 100, clock_opacity: 100, armed_opacity: 100,
+        gamepad_battery_opacity: 100, display_mode_opacity: 100,
         horizon_x: 50, horizon_y: 50, depth_x: 3, depth_y: 15,
         temperature_x: 88, temperature_y: 5, compass_x: 50, compass_y: 92,
         battery_x: 88, battery_y: 12, fps_x: 2, fps_y: 82,
         horizon_line_thick: 2, horizon_circle_opacity: 15, horizon_border_opacity: 25,
         horizon_radius_pct: 18, horizon_pitch_scale: 2, horizon_wing_color: '#FFFF00',
-        horizon_show_text: true, horizon_clip: false, horizon_damping: 5
+        horizon_show_text: true, horizon_clip: false, horizon_damping: 5,
+        motors_x: 1, motors_y: 82,
+        rov3d_x: 99, rov3d_y: 99,
+        clock_x: 99, clock_y: 98,
+        armed_x: 50, armed_y: 6,
+        gamepad_battery_x: 2, gamepad_battery_y: 75,
+        display_mode_x: 98, display_mode_y: 3
     };
 
     // ==========================================================
@@ -165,14 +174,29 @@ const Telemetry = (() => {
     // ==========================================================
     // CONFIG OSD
     // ==========================================================
+    // Clés de position gérées par osd_layouts.json (pas par /api/config)
+    const _LAYOUT_KEYS = [
+        'horizon_x', 'horizon_y', 'depth_x', 'depth_y',
+        'temperature_x', 'temperature_y', 'compass_x', 'compass_y',
+        'battery_x', 'battery_y', 'fps_x', 'fps_y',
+        'motors_x', 'motors_y', 'rov3d_x', 'rov3d_y',
+        'clock_x', 'clock_y',
+        'armed_x', 'armed_y',
+        'gamepad_battery_x', 'gamepad_battery_y',
+        'display_mode_x', 'display_mode_y'
+    ];
+
     function loadOSDConfig() {
         fetch('/api/config').then(r => r.json()).then(config => {
             const osd = config.OSD_DISPLAY || {};
             // Champs booléens à convertir strictement
             const boolKeys = ['show_horizon', 'show_depth', 'show_temperature', 'show_battery',
                               'show_compass', 'show_fps', 'show_motors', 'show_rov3d',
+                              'show_clock', 'show_armed', 'show_gamepad_battery', 'show_display_mode',
                               'horizon_show_text', 'horizon_clip'];
             Object.keys(osdConfig).forEach(key => {
+                // Ne pas écraser les positions layout (gérées par osd_layouts.json)
+                if (_LAYOUT_KEYS.includes(key)) return;
                 if (osd[key] !== undefined) {
                     if (boolKeys.includes(key)) {
                         osdConfig[key] = _toBool(osd[key]);
@@ -188,6 +212,7 @@ const Telemetry = (() => {
         // Conversion booléenne robuste pour les champs concernés
         const boolKeys = ['show_horizon', 'show_depth', 'show_temperature', 'show_battery',
                           'show_compass', 'show_fps', 'show_motors', 'show_rov3d',
+                          'show_clock', 'show_armed', 'show_gamepad_battery', 'show_display_mode',
                           'horizon_show_text', 'horizon_clip'];
         for (const key of boolKeys) {
             if (newConfig[key] !== undefined) {
@@ -340,6 +365,12 @@ const Telemetry = (() => {
             const container = canvas?.parentElement;
             if (!canvas || !container) return;
 
+            // Canvas lunettes : déléguer à Goggle._resizeGoggleCanvas() si overlay non visible
+            if (id === 'goggle-osd-canvas') {
+                const overlayVisible = container.classList.contains('active');
+                if (!overlayVisible) return;  // overlay display:none → dimensions 0, ne pas écraser
+            }
+
             const rect = container.getBoundingClientRect();
             const displayWidth  = Math.max(1, Math.floor(rect.width));
             const displayHeight = Math.max(1, Math.floor(rect.height));
@@ -476,7 +507,7 @@ const Telemetry = (() => {
             }
             // 6. FPS
             if (osdConfig.show_fps) {
-                ctx.globalAlpha = opacity;
+                ctx.globalAlpha = elemAlpha(osdConfig.fps_opacity);
                 drawText(ctx, px(osdConfig.fps_x), py(osdConfig.fps_y), `FPS: ${data.fps}`, osdConfig.fps_color, Math.round(fontSize * 0.85), 'left');
             }
             // 6.1 Alerte faible lumière
@@ -484,28 +515,98 @@ const Telemetry = (() => {
                 ctx.globalAlpha = opacity;
                 drawText(ctx, px(osdConfig.fps_x), py(osdConfig.fps_y) + fontSize, '⚠ Manque de lumière', '#FF4444', Math.round(fontSize * 0.75), 'left');
             }
-            // 7. Timestamp
-            ctx.globalAlpha = opacity;
-            const now = new Date();
-            drawText(ctx, w - 10, h - 15, now.toTimeString().substring(0, 8), osdConfig.fps_color, Math.round(fontSize * 0.85), 'right');
+            // 7. Timestamp (horloge configurable)
+            if (osdConfig.show_clock) {
+                ctx.globalAlpha = elemAlpha(osdConfig.clock_opacity);
+                const now = new Date();
+                const clockX = osdConfig.clock_x != null ? px(osdConfig.clock_x) : w - 10;
+                const clockY = osdConfig.clock_y != null ? py(osdConfig.clock_y) : h - 15;
+                drawText(ctx, clockX, clockY, now.toTimeString().substring(0, 8), osdConfig.fps_color, Math.round(fontSize * 0.85), 'right');
+            }
 
-            // 8. Armé/Désarmé
-            ctx.globalAlpha = opacity;
-            ctx.textAlign = 'center';
-            ctx.font = `bold ${Math.round(fontSize * 1.1)}px 'Courier New', monospace`;
-            ctx.fillStyle = data.armed ? '#FF4444' : '#44FF44';
-            ctx.fillText(data.armed ? '● ARMÉ' : '○ DÉSARMÉ', w / 2, 40);
+            // 8. Armé/Désarmé (position configurable)
+            if (osdConfig.show_armed) {
+                ctx.globalAlpha = elemAlpha(osdConfig.armed_opacity);
+                ctx.textAlign = 'center';
+                const armedFs = Math.round(fontSize * 1.1);
+                ctx.font = `bold ${armedFs}px 'Courier New', monospace`;
+                ctx.fillStyle = data.armed ? '#FF4444' : '#44FF44';
+                const armedX = osdConfig.armed_x != null ? px(osdConfig.armed_x) : w / 2;
+                const armedY = osdConfig.armed_y != null ? py(osdConfig.armed_y) : 40;
+                ctx.fillText(data.armed ? '● ARMÉ' : '○ DÉSARMÉ', armedX, armedY);
+            }
+
+            // 8b. Batterie manette (conditionnel — seulement si info disponible)
+            if (osdConfig.show_gamepad_battery && typeof Gamepad !== 'undefined' && Gamepad.getBatteryLevel) {
+                const gpBat = Gamepad.getBatteryLevel();
+                if (gpBat !== null && gpBat !== undefined) {
+                    ctx.globalAlpha = elemAlpha(osdConfig.gamepad_battery_opacity);
+                    const gpBatFs = Math.round(fontSize * 0.85);
+                    const gpBatText = `🎮 ${gpBat}%`;
+                    const gpBatX = osdConfig.gamepad_battery_x != null ? px(osdConfig.gamepad_battery_x) : 10;
+                    const gpBatY = osdConfig.gamepad_battery_y != null ? py(osdConfig.gamepad_battery_y) : h * 0.75;
+                    drawText(ctx, gpBatX, gpBatY, gpBatText, gpBat > 20 ? '#44FF44' : '#FF4444', gpBatFs, 'left');
+                }
+            }
+
+            // 8c. Mode d'affichage (Écran / Lunettes AR)
+            if (osdConfig.show_display_mode) {
+                ctx.globalAlpha = elemAlpha(osdConfig.display_mode_opacity);
+                const isGoggle = typeof Goggle !== 'undefined' && Goggle.isActive && Goggle.isActive();
+                const modeText = isGoggle ? '🥽 LUNETTES' : '🖥️ ÉCRAN';
+                const modeFs = Math.round(fontSize * 0.9);
+                const modeX = osdConfig.display_mode_x != null ? px(osdConfig.display_mode_x) : w - 10;
+                const modeY = osdConfig.display_mode_y != null ? py(osdConfig.display_mode_y) : 25;
+                drawText(ctx, modeX, modeY, modeText, isGoggle ? '#FF88FF' : '#88CCFF', modeFs, 'right');
+            }
 
             // 9. Propulseurs
             if (osdConfig.show_motors && Array.isArray(data.motors) && data.motors.length > 0) {
                 ctx.globalAlpha = elemAlpha(osdConfig.motors_opacity);
-                drawMotors(ctx, w, h, data.motors, scale, fontSize);
+                drawMotors(ctx, w, h, data.motors, scale, fontSize, osdConfig);
             }
 
             // 10. Rov3D (modèle filaire)
             if (osdConfig.show_rov3d && window.Rov3D) {
                 ctx.globalAlpha = elemAlpha(osdConfig.rov3d_opacity);
-                _compositeRov3D(ctx, w, h, scale);
+                _compositeRov3D(ctx, w, h, scale, osdConfig);
+            }
+
+            // 11. Overlay Drag & Drop (mode édition)
+            if (typeof OSDLayout !== 'undefined' && OSDLayout.isEditMode()) {
+                OSDLayout.drawEditOverlay(ctx, w, h);
+            }
+
+            // 12. Alerte Failsafe — manette déconnectée (clignotant rouge)
+            if (typeof Gamepad !== 'undefined' && Gamepad.isFailsafe && Gamepad.isFailsafe()) {
+                const blink = Math.floor(Date.now() / 500) % 2 === 0;
+                if (blink) {
+                    // Fond semi-transparent rouge sombre
+                    ctx.fillStyle = 'rgba(100, 0, 0, 0.55)';
+                    ctx.fillRect(0, 0, w, h);
+                }
+                // Boîte d'alerte centrée (toujours visible, clignotant texte + fond)
+                const alertFs = Math.round(fontSize * 1.8);
+                const alertText = '⚠️ ALERTE : MANETTE DÉCONNECTÉE';
+                ctx.font = `bold ${alertFs}px 'Courier New', monospace`;
+                const metrics = ctx.measureText(alertText);
+                const boxW = metrics.width + 40;
+                const boxH = alertFs + 30;
+                const boxX = (w - boxW) / 2;
+                const boxY = (h - boxH) / 2;
+                // Fond de la boîte (clignotant inversé pour contraste)
+                ctx.fillStyle = blink ? 'rgba(200, 0, 0, 0.85)' : 'rgba(80, 0, 0, 0.75)';
+                ctx.strokeStyle = '#FF4444';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.roundRect(boxX, boxY, boxW, boxH, 10);
+                ctx.fill();
+                ctx.stroke();
+                // Texte
+                ctx.fillStyle = blink ? '#FFFFFF' : '#FFAAAA';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(alertText, w / 2, h / 2);
             }
 
             ctx.globalAlpha = 1;
@@ -517,17 +618,16 @@ const Telemetry = (() => {
     // ==========================================================
     // COMPOSITING ROV3D (canvas WebGL → canvas OSD)
     // ==========================================================
-    function _compositeRov3D(ctx, w, h, scale) {
+    function _compositeRov3D(ctx, w, h, scale, cfg) {
         if (!window.Rov3D) return;
         const rovCanvas = window.Rov3D.getCanvas();
         if (!rovCanvas) return;
 
-        // Taille : ~30% de la largeur du canvas OSD
+        // Taille : ~30% de la plus petite dimension
         const size = Math.round(Math.min(w, h) * 0.3);
-        // Position : coin bas-droite avec marge
-        const margin = 10;
-        const drawX = w - size - margin;
-        const drawY = h - size - margin;
+        // Position configurable (anchor bottom-right : cfgX/Y = coin bas-droite)
+        const drawX = (cfg && cfg.rov3d_x != null) ? Math.round(w * cfg.rov3d_x / 100) - size : w - size - 10;
+        const drawY = (cfg && cfg.rov3d_y != null) ? Math.round(h * cfg.rov3d_y / 100) - size : h - size - 10;
 
         ctx.drawImage(rovCanvas, drawX, drawY, size, size);
     }
@@ -807,12 +907,12 @@ const Telemetry = (() => {
     // M1-M4 horizontaux (extérieur), M5-M8 verticaux (intérieur)
     // Numérotation officielle : départ avant-droit, sens horaire.
     // ==========================================================
-    function drawMotors(ctx, w, h, motors, scale, fontSize) {
+    function drawMotors(ctx, w, h, motors, scale, fontSize, cfg) {
         const widgetW = Math.round(150 * scale);
         const widgetH = Math.round(130 * scale);
-        const margin = 10;
-        const baseX = margin;                 // bottom-left par défaut
-        const baseY = h - widgetH - margin;
+        // Position configurable (anchor bottom-right : cfgX/Y = coin bas-droite du widget)
+        const baseX = (cfg && cfg.motors_x != null) ? Math.round(w * cfg.motors_x / 100) - widgetW : 10;
+        const baseY = (cfg && cfg.motors_y != null) ? Math.round(h * cfg.motors_y / 100) - widgetH : h - widgetH - 10;
 
         // Fond semi-transparent
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -910,5 +1010,5 @@ const Telemetry = (() => {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
 
-    return { connect, sendCommand, startOSD, stopOSD, getData: () => ({ ...data }), isConnected: () => wsConnected, updateOSDConfig, osdConfig: () => osdConfig };
+    return { connect, sendCommand, startOSD, stopOSD, getData: () => ({ ...data }), isConnected: () => wsConnected, updateOSDConfig, osdConfig: () => osdConfig, resizeCanvas };
 })();

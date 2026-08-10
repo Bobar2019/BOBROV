@@ -108,8 +108,17 @@ class ConfigParser:
                 "horizon_damping": 5,
                 "show_motors": True,
                 "show_rov3d": True,
+                "show_clock": True,
+                "show_armed": True,
+                "show_gamepad_battery": True,
+                "show_display_mode": True,
                 "motors_opacity": 100,
-                "rov3d_opacity": 100
+                "rov3d_opacity": 100,
+                "fps_opacity": 100,
+                "clock_opacity": 100,
+                "armed_opacity": 100,
+                "gamepad_battery_opacity": 100,
+                "display_mode_opacity": 100
             },
             "ROV_CONTROL": {
                 "max_thrust": 100,

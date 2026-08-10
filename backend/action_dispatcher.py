@@ -292,6 +292,24 @@ class ActionDispatcher:
                 'category': 'interface',
                 'handler': None,
             },
+            'goggle_exit': {
+                'status': ActionStatus.PLANNED,
+                'description': 'Quitter le mode Lunette FPV (géré côté IHM)',
+                'category': 'interface',
+                'handler': None,
+            },
+            'night_toggle': {
+                'status': ActionStatus.PLANNED,
+                'description': 'Basculer le mode nuit en Lunette (géré côté IHM)',
+                'category': 'interface',
+                'handler': None,
+            },
+            'crosshair_toggle': {
+                'status': ActionStatus.PLANNED,
+                'description': 'Afficher/Masquer la grille de visée en Lunette (géré côté IHM)',
+                'category': 'interface',
+                'handler': None,
+            },
             'panel_toggle': {
                 'status': ActionStatus.PLANNED,
                 'description': 'Basculer (ouvrir/masquer) le panneau latéral du Cockpit (géré côté IHM)',

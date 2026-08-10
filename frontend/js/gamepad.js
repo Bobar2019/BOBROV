@@ -24,6 +24,16 @@ const Gamepad = (() => {
     let pollTimer = null;
     let armed = false;
 
+    // Niveau de batterie manette (null si indisponible, sinon 0–100)
+    let _batteryLevel = null;
+
+    // Failsafe : surveillance de la connexion manette
+    let _failsafe = false;                // true = manette perdue, alerte active
+    let _watchdogTimer = null;            // identifiant setInterval watchdog
+    let _lastPollTimestamp = 0;           // horodatage du dernier poll valide
+    const WATCHDOG_INTERVAL_MS = 1000;    // vérification toutes les secondes
+    const WATCHDOG_TIMEOUT_MS = 2000;     // seuil d'alerte (2 s sans poll valide)
+
     // Mode de contrôle : 'rov' ou 'ui'
     let controlMode = 'rov';
 
@@ -191,6 +201,9 @@ const Gamepad = (() => {
             // Lancer le polling de détection automatique en fallback
             startAutoDetect();
         }, 100);
+
+        // Démarrer le watchdog failsafe
+        _startWatchdog();
     }
 
     // ----------------------------------------------------------
@@ -353,6 +366,11 @@ const Gamepad = (() => {
         connected = true;
         console.log(`[Gamepad] Connecté: "${gp.id}" (${gp.axes.length} axes, ${gp.buttons.length} boutons)`);
 
+        // === Failsafe : désactiver si actif ===
+        if (_failsafe) {
+            _deactivateFailsafe();
+        }
+
         updateStatusUI(true, gp.id);
         // Recharger le mapping à chaque connexion (au cas où il a changé)
         loadActiveProfile();
@@ -369,6 +387,10 @@ const Gamepad = (() => {
         console.log(`[Gamepad] Déconnecté: "${event.gamepad.id}"`);
         gamepadIndex = null;
         connected = false;
+        _batteryLevel = null;
+
+        // === Failsafe : activer immédiatement ===
+        _activateFailsafe('gamepaddisconnected');
 
         updateStatusUI(false, '');
         stopPolling();
@@ -399,15 +421,22 @@ const Gamepad = (() => {
     function pollLoop() {
         if (!connected) return;
 
+        // Horodatage du dernier poll valide (pour le watchdog failsafe)
+        _lastPollTimestamp = performance.now();
+
         const gamepads = navigator.getGamepads();
         const gp = gamepads[gamepadIndex];
 
         if (!gp) {
             connected = false;
+            _batteryLevel = null;
             updateStatusUI(false, '');
             stopPolling();
             return;
         }
+
+        // Lecture batterie manette (si supportée par le navigateur/manette)
+        _batteryLevel = _readBattery(gp);
 
         // Détection long press TOUCHPAD (toujours actif, quel que soit le mode)
         processTouchpadLongPress(gp);
@@ -786,6 +815,9 @@ const Gamepad = (() => {
         roll = roll || 0;
         pitch = pitch || 0;
 
+        // Failsafe : bloquer tout envoi de mouvement si manette perdue
+        if (_failsafe) return;
+
         // Vérifier les valeurs NaN (peut arriver si deadzone retourne NaN)
         if (isNaN(forward) || isNaN(lateral) || isNaN(vertical) ||
             isNaN(yaw) || isNaN(roll) || isNaN(pitch)) {
@@ -855,21 +887,24 @@ const Gamepad = (() => {
         };
     }
 
-    async function loadActiveProfile() {
+    async function loadActiveProfile(forceBackend) {
         // 1. localStorage prioritaire : mapping écrit immédiatement par la page
         //    de configuration → consommation fluide sans requête réseau.
-        try {
-            const raw = localStorage.getItem(LS_MAPPING_KEY);
-            if (raw) {
-                const stored = JSON.parse(raw);
-                if (stored && (stored.buttons || stored.axes)) {
-                    applyStoredSettings(stored.settings);
-                    applyProfileMapping(stored);
-                    return;
+        //    forceBackend=true permet d'ignorer ce cache (ex: switch profil Lunette)
+        if (!forceBackend) {
+            try {
+                const raw = localStorage.getItem(LS_MAPPING_KEY);
+                if (raw) {
+                    const stored = JSON.parse(raw);
+                    if (stored && (stored.buttons || stored.axes)) {
+                        applyStoredSettings(stored.settings);
+                        applyProfileMapping(stored);
+                        return;
+                    }
                 }
+            } catch (e) {
+                // localStorage corrompu ou indisponible : fallback API ci-dessous
             }
-        } catch (e) {
-            // localStorage corrompu ou indisponible : fallback API ci-dessous
         }
 
         // 2. Fallback : profil actif côté backend
@@ -972,6 +1007,90 @@ const Gamepad = (() => {
     }
 
     // ==========================================================
+    // BATTERIE MANETTE
+    // ==========================================================
+
+    /**
+     * Lit le niveau de batterie de la manette (propriété non-standard).
+     * Retourne null si non supportée, sinon un entier 0–100.
+     * Gère les formats : number (0..1), object { level }, object { dischargingTime }.
+     */
+    function _readBattery(gp) {
+        if (!gp) return null;
+        const bat = gp.battery;
+        if (bat == null) return null;
+        // Format number direct (0.0..1.0)
+        if (typeof bat === 'number' && !isNaN(bat) && bat >= 0 && bat <= 1) {
+            return Math.round(bat * 100);
+        }
+        // Format objet { level: 0..1 } ou { level: 0..100 }
+        if (typeof bat === 'object' && bat.level != null) {
+            const lvl = Number(bat.level);
+            if (isNaN(lvl) || lvl < 0) return null;
+            return lvl <= 1 ? Math.round(lvl * 100) : Math.min(100, Math.round(lvl));
+        }
+        return null;
+    }
+
+    /** Retourne le niveau de batterie manette (null si non disponible). */
+    function getBatteryLevel() {
+        return _batteryLevel;
+    }
+
+    // ==========================================================
+    // FAILSAFE — Surveillance connexion manette (Watchdog)
+    // ==========================================================
+
+    function _startWatchdog() {
+        if (_watchdogTimer) return;
+        _lastPollTimestamp = performance.now();
+        _watchdogTimer = setInterval(_watchdogTick, WATCHDOG_INTERVAL_MS);
+    }
+
+    function _stopWatchdog() {
+        if (_watchdogTimer) {
+            clearInterval(_watchdogTimer);
+            _watchdogTimer = null;
+        }
+    }
+
+    function _watchdogTick() {
+        const elapsed = performance.now() - _lastPollTimestamp;
+
+        if (!_failsafe && connected && elapsed > WATCHDOG_TIMEOUT_MS) {
+            // Manette ne répond plus depuis trop longtemps
+            _activateFailsafe('watchdog_timeout');
+        }
+
+        if (_failsafe && connected && elapsed < WATCHDOG_INTERVAL_MS) {
+            // Polling actif de nouveau → manette récupérée
+            _deactivateFailsafe();
+        }
+    }
+
+    function _activateFailsafe(reason) {
+        if (_failsafe) return;
+        _failsafe = true;
+        console.warn(`[Gamepad] ⚠️ FAILSAFE activé (${reason}) — manette perdue`);
+        // Envoyer stop immédiat : tous les axes à 0
+        Telemetry.sendCommand({
+            command: 'move',
+            forward: 0, lateral: 0, vertical: 0,
+            yaw: 0, roll: 0, pitch: 0
+        });
+    }
+
+    function _deactivateFailsafe() {
+        if (!_failsafe) return;
+        _failsafe = false;
+        console.log('[Gamepad] ✅ Failsafe désactivé — contrôle rétabli');
+    }
+
+    function isFailsafe() {
+        return _failsafe;
+    }
+
+    // ==========================================================
     // INITIALISATION
     // ==========================================================
 
@@ -992,12 +1111,15 @@ const Gamepad = (() => {
         getControlMode: () => controlMode,
         setControlMode: (mode) => { controlMode = mode; updateModeIndicator(); },
         loadActiveProfile,
+        reloadFromBackend: () => loadActiveProfile(true),
         applyProfileMapping,
         reloadMapping: loadActiveProfile,
         onCockpitActivate,
         scanForGamepads,
         setTestMode,
-        isTestMode
+        isTestMode,
+        getBatteryLevel,
+        isFailsafe
     };
 
 })();

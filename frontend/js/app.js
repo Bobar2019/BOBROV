@@ -1204,6 +1204,24 @@ const App = (() => {
                 return;
             }
 
+            // === Actions manette : mode Lunette (gérées côté IHM) ===
+            if (r.function === 'fpv_toggle' && typeof Goggle !== 'undefined') {
+                Goggle.toggle();
+                return;
+            }
+            if (r.function === 'goggle_exit' && typeof Goggle !== 'undefined') {
+                Goggle.deactivate();
+                return;
+            }
+            if (r.function === 'night_toggle' && typeof Goggle !== 'undefined') {
+                Goggle.toggleNight();
+                return;
+            }
+            if (r.function === 'crosshair_toggle' && typeof Goggle !== 'undefined') {
+                Goggle.toggleCrosshair();
+                return;
+            }
+
             // Notification visuelle
             if (msg) showNotification(msg);
 

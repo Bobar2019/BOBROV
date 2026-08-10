@@ -7,10 +7,11 @@ const Goggle = (() => {
     let hideTimeout = null;
     let timerInterval = null;
     let startTime = 0;
+    let _intentionalFsToggle = false; // true quand on bascule le plein écran via F (ne pas fermer les lunettes)
     const INACTIVITY_TIMEOUT = 3000; // 3 secondes
 
     // === ÉLÉMENTS DOM ===
-    let overlay, videoEl, toolbar, controls, crosshair, timerEl;
+    let overlay, videoEl, toolbar, controls, crosshair, timerEl, osdCanvas;
 
     function init() {
         overlay = document.getElementById('goggle-overlay');
@@ -21,8 +22,19 @@ const Goggle = (() => {
         crosshair = overlay.querySelector('.goggle-crosshair');
         timerEl = overlay.querySelector('.goggle-timer');
 
+        // Créer le canvas OSD dédié au mode lunettes (une seule fois)
+        osdCanvas = document.getElementById('goggle-osd-canvas');
+        if (!osdCanvas && overlay) {
+            osdCanvas = document.createElement('canvas');
+            osdCanvas.id = 'goggle-osd-canvas';
+            osdCanvas.className = 'goggle-osd-canvas';
+            // Insérer après la vidéo mais avant la toolbar
+            overlay.insertBefore(osdCanvas, overlay.querySelector('.goggle-toolbar') || overlay.firstChild);
+        }
+
         setupKeyboardShortcuts();
         setupMouseActivity();
+        setupFullscreenListener();
     }
 
     // === ACTIVATION / DÉSACTIVATION ===
@@ -66,7 +78,37 @@ const Goggle = (() => {
             // Démarrer auto-hide
             resetInactivityTimer();
 
+            // Basculer vers le profil OSD lunettes
+            if (typeof OSDLayout !== 'undefined' && OSDLayout.setProfile) {
+                OSDLayout.setProfile('goggles', true);
+            }
+
+            // Redimensionner le canvas OSD lunettes
+            // Utiliser requestAnimationFrame pour laisser le navigateur calculer le layout flex
+            if (osdCanvas) {
+                requestAnimationFrame(() => {
+                    _resizeGoggleCanvas();
+                    // Synchroniser le contexte 2D via telemetry
+                    if (typeof Telemetry !== 'undefined' && Telemetry.resizeCanvas) {
+                        Telemetry.resizeCanvas();
+                    }
+                });
+                // Deuxième resize différé pour garantir le layout final
+                setTimeout(() => {
+                    _resizeGoggleCanvas();
+                    if (typeof Telemetry !== 'undefined' && Telemetry.resizeCanvas) {
+                        Telemetry.resizeCanvas();
+                    }
+                }, 200);
+            }
+
             if (typeof App !== 'undefined') App.showNotification('🥽 Mode Lunette activé');
+
+            // Recharger immédiatement le mapping manette depuis le backend
+            // (le profil "Lunette" vient d'être activé côté serveur)
+            if (typeof Gamepad !== 'undefined' && Gamepad.reloadFromBackend) {
+                Gamepad.reloadFromBackend();
+            }
 
         } catch(e) {
             console.error('[Goggle] Erreur activation:', e);
@@ -86,6 +128,11 @@ const Goggle = (() => {
         overlay.classList.remove('active', 'night-mode', 'hide-ui');
         nightMode = false;
 
+        // Restaurer le profil OSD écran
+        if (typeof OSDLayout !== 'undefined' && OSDLayout.setProfile) {
+            OSDLayout.setProfile('screen', true);
+        }
+
         // Arrêter le timer
         if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 
@@ -96,6 +143,12 @@ const Goggle = (() => {
         videoEl.src = '';
 
         if (typeof App !== 'undefined') App.showNotification('Mode Lunette désactivé');
+
+        // Recharger immédiatement le mapping manette depuis le backend
+        // (le profil précédent vient d'être restauré côté serveur)
+        if (typeof Gamepad !== 'undefined' && Gamepad.reloadFromBackend) {
+            Gamepad.reloadFromBackend();
+        }
     }
 
     function toggle() {
@@ -140,8 +193,37 @@ const Goggle = (() => {
     }
 
     function toggleFullscreen() {
-        if (document.fullscreenElement || document.webkitFullscreenElement) exitFullscreen();
-        else requestFullscreen();
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+            _intentionalFsToggle = true;
+            exitFullscreen();
+        } else {
+            requestFullscreen();
+        }
+    }
+
+    // === FULLSCREEN CHANGE LISTENER ===
+
+    function setupFullscreenListener() {
+        const handler = () => {
+            if (!active) return;
+            // Si on bascule le plein écran via F, ne pas fermer les lunettes
+            if (_intentionalFsToggle) {
+                _intentionalFsToggle = false;
+                return;
+            }
+            // Distinguer entrée vs sortie de plein écran
+            const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
+            if (fsElement) {
+                // Entrée en plein écran → rien à faire (c'est l'activation normale)
+                return;
+            }
+            // Sortie de plein écran détectée (Escape navigateur, swipe, etc.)
+            // → Désactiver le mode lunette automatiquement
+            console.log('[Goggle] Sortie de plein écran détectée → désactivation');
+            deactivate();
+        };
+        document.addEventListener('fullscreenchange', handler);
+        document.addEventListener('webkitfullscreenchange', handler);
     }
 
     // === AUTO-HIDE UI (inactivité) ===
@@ -198,6 +280,20 @@ const Goggle = (() => {
         timerEl.textContent = `${min}:${sec}`;
     }
 
+    // === CANVAS OSD LUNETTES ===
+
+    function _resizeGoggleCanvas() {
+        if (!osdCanvas || !overlay) return;
+        const rect = overlay.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const w = Math.max(1, Math.floor(rect.width));
+        const h = Math.max(1, Math.floor(rect.height));
+        osdCanvas.width  = Math.round(w * dpr);
+        osdCanvas.height = Math.round(h * dpr);
+        osdCanvas.style.width  = w + 'px';
+        osdCanvas.style.height = h + 'px';
+    }
+
     // === COMMANDES RAPIDES (boutons overlay) ===
 
     async function quickAction(actionName) {
@@ -223,5 +319,6 @@ const Goggle = (() => {
         toggleFullscreen,
         quickAction,
         isActive: () => active,
+        getOsdCanvas: () => osdCanvas,
     };
 })();

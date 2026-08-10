@@ -377,6 +377,41 @@
                             </div>
                         </div>
 
+                        <!-- === Accordéon : Mise en page OSD === -->
+                        <div class="cockpit-section" data-section="layout">
+                            <div class="section-header">
+                                <span class="section-title">📐 Mise en page</span>
+                                <span class="section-indicator">▾</span>
+                            </div>
+                            <div class="section-body">
+                                <!-- Sélecteur de profil -->
+                                <div class="layout-profile-selector">
+                                    <label class="layout-profile-label">
+                                        <input type="radio" name="osd-layout-profile" value="screen" checked>
+                                        🖥️ Profil Écran
+                                    </label>
+                                    <label class="layout-profile-label">
+                                        <input type="radio" name="osd-layout-profile" value="goggles">
+                                        🥽 Profil Lunettes AR
+                                    </label>
+                                </div>
+                                <div class="layout-profile-status" id="layout-profile-status">🖥️ Profil Écran</div>
+
+                                <!-- Mode édition -->
+                                <label class="toggle-label layout-edit-toggle">
+                                    <input type="checkbox" id="cfg-layout-edit-mode">
+                                    <span>✏️ Mode Édition (Drag &amp; Drop)</span>
+                                </label>
+                                <p class="layout-hint">Glissez les éléments OSD directement sur la vidéo pour les repositionner.</p>
+
+                                <!-- Boutons -->
+                                <div class="layout-buttons">
+                                    <button class="btn btn-primary btn-sm" id="btn-save-layout" title="Sauvegarder les positions actuelles">💾 Enregistrer</button>
+                                    <button class="btn btn-secondary btn-sm" id="btn-reset-layout" title="Revenir aux positions par défaut">↩ Réinitialiser</button>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </section>
@@ -426,6 +461,10 @@
                         <label class="toggle-label"><input type="checkbox" id="cfg-show-fps" checked> FPS</label>
                         <label class="toggle-label"><input type="checkbox" id="cfg-show-motors" checked> Propulseurs</label>
                         <label class="toggle-label"><input type="checkbox" id="cfg-show-rov3d" checked> Rov3D (modèle filaire)</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-clock" checked> Horloge</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-armed" checked> Statut Armé/Désarmé</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-gamepad-battery" checked> Batterie Manette</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-display-mode" checked> Mode d'affichage</label>
                     </div>
                     <div class="config-card">
                         <h3>Couleurs</h3>
@@ -447,6 +486,11 @@
                         <label>Transparence Batterie <input type="range" id="cfg-battery-opacity" min="10" max="100" value="100"><span id="battery-opacity-val">100%</span></label>
                         <label>Transparence Propulseurs <input type="range" id="cfg-motors-opacity" min="10" max="100" value="100"><span id="motors-opacity-val">100%</span></label>
                         <label>Transparence Rov3D <input type="range" id="cfg-rov3d-opacity" min="10" max="100" value="100"><span id="rov3d-opacity-val">100%</span></label>
+                        <label>Transparence FPS <input type="range" id="cfg-fps-opacity" min="10" max="100" value="100"><span id="fps-opacity-val">100%</span></label>
+                        <label>Transparence Horloge <input type="range" id="cfg-clock-opacity" min="10" max="100" value="100"><span id="clock-opacity-val">100%</span></label>
+                        <label>Transparence Armé/Désarmé <input type="range" id="cfg-armed-opacity" min="10" max="100" value="100"><span id="armed-opacity-val">100%</span></label>
+                        <label>Transparence Bat. Manette <input type="range" id="cfg-gamepad-battery-opacity" min="10" max="100" value="100"><span id="gamepad-battery-opacity-val">100%</span></label>
+                        <label>Transparence Mode <input type="range" id="cfg-display-mode-opacity" min="10" max="100" value="100"><span id="display-mode-opacity-val">100%</span></label>
                         <label>Taille police <input type="range" id="cfg-font-scale" min="0.4" max="1.5" step="0.1" value="0.8"><span id="font-scale-value">0.8</span></label>
                     </div>
                     <div class="config-card">
@@ -905,6 +949,7 @@
     <script src="js/gamepad_nav.js"></script>
     <script src="js/simulation.js"></script>
     <script src="js/camera_config.js"></script>
+    <script src="js/osd_layout.js"></script>
     <script src="js/osd_config.js"></script>
     <script src="js/gamepad_config.js"></script>
     <script src="js/gamepad_visual.js"></script>

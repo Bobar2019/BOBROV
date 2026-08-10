@@ -21,19 +21,28 @@ const OSDConfig = (() => {
     const DEFAULTS = {
         show_horizon: true, show_depth: true, show_temperature: true,
         show_battery: true, show_compass: true, show_fps: true, show_motors: true,
-        show_rov3d: true,
+        show_rov3d: true, show_clock: true, show_armed: true,
+        show_gamepad_battery: true, show_display_mode: true,
         horizon_color: '#00FF88', depth_color: '#00AAFF', temperature_color: '#FFAA00',
         compass_color: '#FFFFFF', battery_color: '#00CC44', fps_color: '#FFFFFF',
         primary_color: '#00FF00', font_scale: 0.8, opacity: 100,
         depth_opacity: 100, temperature_opacity: 100,
         compass_opacity: 100, battery_opacity: 100, motors_opacity: 100,
         horizon_opacity: 100, rov3d_opacity: 100,
+        fps_opacity: 100, clock_opacity: 100, armed_opacity: 100,
+        gamepad_battery_opacity: 100, display_mode_opacity: 100,
         horizon_x: 50, horizon_y: 50, depth_x: 3, depth_y: 15,
         temperature_x: 88, temperature_y: 5, compass_x: 50, compass_y: 92,
         battery_x: 88, battery_y: 12, fps_x: 2, fps_y: 82,
         horizon_line_thick: 2, horizon_circle_opacity: 15, horizon_border_opacity: 25,
         horizon_radius_pct: 18, horizon_pitch_scale: 2, horizon_wing_color: '#FFFF00',
-        horizon_show_text: true, horizon_clip: false, horizon_damping: 5
+        horizon_show_text: true, horizon_clip: false, horizon_damping: 5,
+        motors_x: 1, motors_y: 82,
+        rov3d_x: 99, rov3d_y: 99,
+        clock_x: 99, clock_y: 98,
+        armed_x: 50, armed_y: 6,
+        gamepad_battery_x: 2, gamepad_battery_y: 75,
+        display_mode_x: 98, display_mode_y: 3
     };
 
     // ==========================================================
@@ -64,7 +73,12 @@ const OSDConfig = (() => {
             { id: 'cfg-compass-opacity',     valId: 'compass-opacity-val',     key: 'compass_opacity' },
             { id: 'cfg-battery-opacity',     valId: 'battery-opacity-val',     key: 'battery_opacity' },
             { id: 'cfg-motors-opacity',      valId: 'motors-opacity-val',      key: 'motors_opacity' },
-            { id: 'cfg-rov3d-opacity',       valId: 'rov3d-opacity-val',       key: 'rov3d_opacity' }
+            { id: 'cfg-rov3d-opacity',       valId: 'rov3d-opacity-val',       key: 'rov3d_opacity' },
+            { id: 'cfg-fps-opacity',         valId: 'fps-opacity-val',         key: 'fps_opacity' },
+            { id: 'cfg-clock-opacity',       valId: 'clock-opacity-val',       key: 'clock_opacity' },
+            { id: 'cfg-armed-opacity',       valId: 'armed-opacity-val',       key: 'armed_opacity' },
+            { id: 'cfg-gamepad-battery-opacity', valId: 'gamepad-battery-opacity-val', key: 'gamepad_battery_opacity' },
+            { id: 'cfg-display-mode-opacity', valId: 'display-mode-opacity-val', key: 'display_mode_opacity' }
         ];
         elemOpacitySliders.forEach(({ id, valId, key }) => {
             const slider = document.getElementById(id);
@@ -131,8 +145,8 @@ const OSDConfig = (() => {
         }
 
         // Checkboxes : appliquer en direct
-        ['show_horizon', 'show_depth', 'show_temperature', 'show_battery', 'show_compass', 'show_fps', 'show_motors', 'show_rov3d'].forEach(key => {
-            const el = document.getElementById(`cfg-${key.replace('_', '-')}`);
+        ['show_horizon', 'show_depth', 'show_temperature', 'show_battery', 'show_compass', 'show_fps', 'show_motors', 'show_rov3d', 'show_clock', 'show_armed', 'show_gamepad_battery', 'show_display_mode'].forEach(key => {
+            const el = document.getElementById(`cfg-${key.replace(/_/g, '-')}`);
             if (el) {
                 el.addEventListener('change', () => {
                     _applyLive({ [key]: el.checked });
@@ -195,6 +209,9 @@ const OSDConfig = (() => {
 
         // Charger la config actuelle
         load();
+
+        // === PANNEAU MISE EN PAGE (Drag & Drop) ===
+        _initLayoutPanel();
     }
 
     // ==========================================================
@@ -240,6 +257,10 @@ const OSDConfig = (() => {
                 App.setCheckbox('cfg-show-fps', _toBool(osd.show_fps));
                 App.setCheckbox('cfg-show-motors', _toBool(osd.show_motors !== undefined ? osd.show_motors : true));
                 App.setCheckbox('cfg-show-rov3d', _toBool(osd.show_rov3d !== undefined ? osd.show_rov3d : true));
+                App.setCheckbox('cfg-show-clock', _toBool(osd.show_clock !== undefined ? osd.show_clock : true));
+                App.setCheckbox('cfg-show-armed', _toBool(osd.show_armed !== undefined ? osd.show_armed : true));
+                App.setCheckbox('cfg-show-gamepad-battery', _toBool(osd.show_gamepad_battery !== undefined ? osd.show_gamepad_battery : true));
+                App.setCheckbox('cfg-show-display-mode', _toBool(osd.show_display_mode !== undefined ? osd.show_display_mode : true));
 
                 // Couleurs
                 setColor('cfg-horizon-color', osd.horizon_color);
@@ -262,6 +283,11 @@ const OSDConfig = (() => {
                 _setSlider('cfg-battery-opacity',     osd.battery_opacity || 100,     'battery-opacity-val',     '%');
                 _setSlider('cfg-motors-opacity',      osd.motors_opacity || 100,      'motors-opacity-val',      '%');
                 _setSlider('cfg-rov3d-opacity',       osd.rov3d_opacity || 100,       'rov3d-opacity-val',       '%');
+                _setSlider('cfg-fps-opacity',         osd.fps_opacity || 100,         'fps-opacity-val',         '%');
+                _setSlider('cfg-clock-opacity',       osd.clock_opacity || 100,       'clock-opacity-val',       '%');
+                _setSlider('cfg-armed-opacity',       osd.armed_opacity || 100,       'armed-opacity-val',       '%');
+                _setSlider('cfg-gamepad-battery-opacity', osd.gamepad_battery_opacity || 100, 'gamepad-battery-opacity-val', '%');
+                _setSlider('cfg-display-mode-opacity', osd.display_mode_opacity || 100, 'display-mode-opacity-val', '%');
 
                 const fontScale = document.getElementById('cfg-font-scale');
                 if (fontScale) { fontScale.value = osd.font_scale || 0.8; document.getElementById('font-scale-value').textContent = fontScale.value; }
@@ -290,8 +316,23 @@ const OSDConfig = (() => {
                 setNumber('cfg-battery-y', osd.battery_y);
 
                 // Mettre à jour le module Telemetry
+                // (sans les clés de position, gérées par osd_layouts.json)
                 if (typeof Telemetry !== 'undefined') {
-                    Telemetry.updateOSDConfig(osd);
+                    const layoutKeys = [
+                        'horizon_x', 'horizon_y', 'depth_x', 'depth_y',
+                        'temperature_x', 'temperature_y', 'compass_x', 'compass_y',
+                        'battery_x', 'battery_y', 'fps_x', 'fps_y',
+                        'motors_x', 'motors_y', 'rov3d_x', 'rov3d_y',
+                        'clock_x', 'clock_y',
+                        'armed_x', 'armed_y',
+                        'gamepad_battery_x', 'gamepad_battery_y',
+                        'display_mode_x', 'display_mode_y'
+                    ];
+                    const filtered = {};
+                    for (const [k, v] of Object.entries(osd)) {
+                        if (!layoutKeys.includes(k)) filtered[k] = v;
+                    }
+                    Telemetry.updateOSDConfig(filtered);
                 }
             })
             .catch(err => console.error('[OSD Config] Erreur chargement:', err));
@@ -310,6 +351,10 @@ const OSDConfig = (() => {
             show_fps: App.getCheckbox('cfg-show-fps'),
             show_motors: App.getCheckbox('cfg-show-motors'),
             show_rov3d: App.getCheckbox('cfg-show-rov3d'),
+            show_clock: App.getCheckbox('cfg-show-clock'),
+            show_armed: App.getCheckbox('cfg-show-armed'),
+            show_gamepad_battery: App.getCheckbox('cfg-show-gamepad-battery'),
+            show_display_mode: App.getCheckbox('cfg-show-display-mode'),
             horizon_color: getColor('cfg-horizon-color'),
             depth_color: getColor('cfg-depth-color'),
             temperature_color: getColor('cfg-temperature-color'),
@@ -325,6 +370,11 @@ const OSDConfig = (() => {
             battery_opacity: parseInt(document.getElementById('cfg-battery-opacity')?.value || '100'),
             motors_opacity: parseInt(document.getElementById('cfg-motors-opacity')?.value || '100'),
             rov3d_opacity: parseInt(document.getElementById('cfg-rov3d-opacity')?.value || '100'),
+            fps_opacity: parseInt(document.getElementById('cfg-fps-opacity')?.value || '100'),
+            clock_opacity: parseInt(document.getElementById('cfg-clock-opacity')?.value || '100'),
+            armed_opacity: parseInt(document.getElementById('cfg-armed-opacity')?.value || '100'),
+            gamepad_battery_opacity: parseInt(document.getElementById('cfg-gamepad-battery-opacity')?.value || '100'),
+            display_mode_opacity: parseInt(document.getElementById('cfg-display-mode-opacity')?.value || '100'),
             font_scale: parseFloat(document.getElementById('cfg-font-scale')?.value || '0.8'),
             horizon_line_thick: parseFloat(document.getElementById('cfg-horizon-line-thick')?.value || '2'),
             horizon_circle_opacity: parseInt(document.getElementById('cfg-horizon-circle-opacity')?.value || '15'),
@@ -374,6 +424,10 @@ const OSDConfig = (() => {
         App.setCheckbox('cfg-show-fps', true);
         App.setCheckbox('cfg-show-motors', true);
         App.setCheckbox('cfg-show-rov3d', true);
+        App.setCheckbox('cfg-show-clock', true);
+        App.setCheckbox('cfg-show-armed', true);
+        App.setCheckbox('cfg-show-gamepad-battery', true);
+        App.setCheckbox('cfg-show-display-mode', true);
 
         setColor('cfg-horizon-color', DEFAULTS.horizon_color);
         setColor('cfg-depth-color', DEFAULTS.depth_color);
@@ -393,6 +447,11 @@ const OSDConfig = (() => {
         _setSlider('cfg-battery-opacity', 100, 'battery-opacity-val', '%');
         _setSlider('cfg-motors-opacity', 100, 'motors-opacity-val', '%');
         _setSlider('cfg-rov3d-opacity', 100, 'rov3d-opacity-val', '%');
+        _setSlider('cfg-fps-opacity', 100, 'fps-opacity-val', '%');
+        _setSlider('cfg-clock-opacity', 100, 'clock-opacity-val', '%');
+        _setSlider('cfg-armed-opacity', 100, 'armed-opacity-val', '%');
+        _setSlider('cfg-gamepad-battery-opacity', 100, 'gamepad-battery-opacity-val', '%');
+        _setSlider('cfg-display-mode-opacity', 100, 'display-mode-opacity-val', '%');
 
         const fontScale = document.getElementById('cfg-font-scale');
         if (fontScale) { fontScale.value = 0.8; document.getElementById('font-scale-value').textContent = '0.8'; }
@@ -421,6 +480,72 @@ const OSDConfig = (() => {
         }).catch(() => {});
 
         App.showNotification('Valeurs par défaut restaurées');
+    }
+
+    // ==========================================================
+    // PANNEAU MISE EN PAGE (Drag & Drop)
+    // ==========================================================
+    function _initLayoutPanel() {
+        // Sélecteur de profil (boutons radio)
+        const radios = document.querySelectorAll('input[name="osd-layout-profile"]');
+        radios.forEach(r => {
+            r.addEventListener('change', () => {
+                if (r.checked) {
+                    _switchProfile(r.value);
+                }
+            });
+        });
+
+        // Checkbox mode édition
+        const editToggle = document.getElementById('cfg-layout-edit-mode');
+        if (editToggle) {
+            editToggle.addEventListener('change', () => {
+                if (typeof OSDLayout !== 'undefined') {
+                    OSDLayout.setEditMode(editToggle.checked);
+                    const label = editToggle.closest('label');
+                    if (label) label.classList.toggle('active', editToggle.checked);
+                }
+            });
+        }
+
+        // Bouton Enregistrer
+        const btnSave = document.getElementById('btn-save-layout');
+        if (btnSave) {
+            btnSave.addEventListener('click', () => _saveLayout());
+        }
+
+        // Bouton Réinitialiser
+        const btnReset = document.getElementById('btn-reset-layout');
+        if (btnReset) {
+            btnReset.addEventListener('click', () => _resetLayout());
+        }
+    }
+
+    async function _switchProfile(profile) {
+        if (typeof OSDLayout === 'undefined') return;
+        await OSDLayout.setProfile(profile, true);
+        // Mettre à jour les indicateurs visuels
+        const statusEl = document.getElementById('layout-profile-status');
+        if (statusEl) {
+            statusEl.textContent = profile === 'goggles' ? '🥽 Profil Lunettes' : '🖥️ Profil Écran';
+        }
+        console.log(`[OSD Config] Profil OSD basculé: ${profile}`);
+    }
+
+    async function _saveLayout() {
+        if (typeof OSDLayout === 'undefined') return;
+        const result = await OSDLayout.save();
+        if (result && result.status === 'ok') {
+            App.showNotification('Disposition OSD sauvegardée !');
+        } else {
+            App.showNotification('❌ Erreur de sauvegarde');
+        }
+    }
+
+    async function _resetLayout() {
+        if (typeof OSDLayout === 'undefined') return;
+        await OSDLayout.reset();
+        App.showNotification('Disposition OSD réinitialisée');
     }
 
     // ==========================================================

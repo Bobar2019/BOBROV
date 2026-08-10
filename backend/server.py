@@ -637,6 +637,82 @@ class WebServer:
             logger.info(f"Config OSD mise à jour en direct: {list(data.keys())}")
             return {"status": "ok", "updated": list(data.keys())}
 
+        # === API OSD LAYOUT (positions drag & drop par profil) ===
+        LAYOUT_FILE = Path("osd_layouts.json")
+
+        # Layout par défaut (source unique)
+        _DEFAULT_LAYOUT = {
+            "depth_x": 3, "depth_y": 15,
+            "temperature_x": 88, "temperature_y": 5,
+            "compass_x": 50, "compass_y": 92,
+            "battery_x": 88, "battery_y": 12,
+            "fps_x": 2, "fps_y": 82,
+            "horizon_x": 50, "horizon_y": 50,
+            "motors_x": 1, "motors_y": 82,
+            "rov3d_x": 99, "rov3d_y": 99,
+            "clock_x": 99, "clock_y": 98,
+            "armed_x": 50, "armed_y": 6,
+            "gamepad_battery_x": 2, "gamepad_battery_y": 75,
+            "display_mode_x": 98, "display_mode_y": 3,
+        }
+
+        def _read_layouts() -> dict:
+            """Lit osd_layouts.json et complète les clés manquantes avec les defaults."""
+            layouts = None
+            if LAYOUT_FILE.exists():
+                try:
+                    layouts = json.loads(LAYOUT_FILE.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    pass
+            if layouts is None:
+                layouts = {"screen": dict(_DEFAULT_LAYOUT), "goggles": dict(_DEFAULT_LAYOUT)}
+            # Compléter chaque profil avec les clés manquantes
+            for profile in ("screen", "goggles"):
+                if profile not in layouts:
+                    layouts[profile] = dict(_DEFAULT_LAYOUT)
+                else:
+                    for k, v in _DEFAULT_LAYOUT.items():
+                        layouts[profile].setdefault(k, v)
+            return layouts
+
+        def _write_layouts(layouts: dict):
+            """Écrit osd_layouts.json avec flush explicite sur disque."""
+            with open(LAYOUT_FILE, 'w', encoding='utf-8') as f:
+                json.dump(layouts, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+
+        @self.app.get("/api/osd/layout")
+        async def get_osd_layout(profile: str = "screen"):
+            """Retourne la disposition OSD pour un profil donné."""
+            layouts = _read_layouts()
+            data = layouts.get(profile, layouts.get("screen", {}))
+            return {"status": "ok", "profile": profile, "layout": data}
+
+        @self.app.post("/api/osd/layout")
+        async def save_osd_layout(body: Dict[str, Any]):
+            """Sauvegarde la disposition OSD pour un profil donné."""
+            profile = body.get("profile", "screen")
+            layout = body.get("layout", {})
+            if profile not in ("screen", "goggles"):
+                return {"status": "error", "message": f"Profil inconnu: {profile}"}
+            layouts = _read_layouts()
+            layouts[profile] = layout
+            _write_layouts(layouts)
+            # Propager en direct si c'est le profil actif
+            if self.video_streamer and hasattr(self.video_streamer, 'update_osd_config'):
+                self.video_streamer.update_osd_config(layout)
+            logger.info(f"Layout OSD '{profile}' sauvegardé")
+            return {"status": "ok", "profile": profile, "saved": list(layout.keys())}
+
+        @self.app.get("/api/osd/layout/default")
+        async def get_default_osd_layout():
+            """Retourne la disposition OSD par défaut (hardcodée)."""
+            return {
+                "status": "ok",
+                "layout": dict(_DEFAULT_LAYOUT)
+            }
+
         # === API SIMULATION (Scénarios) ===
         @self.app.get("/api/scenarios")
         async def list_scenarios():
