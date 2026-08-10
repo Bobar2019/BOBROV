@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BOB-ROV · Visualiseur 3D</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>">
+    <style>
+        :root {
+            --bg: #0b1020; --panel: rgba(16, 24, 42, 0.82); --border: #24304d;
+            --text: #e6ecff; --muted: #8aa0c8; --accent: #35d0ba; --accent-red: #ff5a6a;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; }
+        body {
+            background: radial-gradient(circle at 50% 30%, #16203c 0%, var(--bg) 70%);
+            color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+        #scene-container { position: fixed; inset: 0; z-index: 0; }
+        canvas { display: block; }
+
+        .top-bar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+            display: flex; align-items: center; gap: 14px;
+            padding: 10px 16px; background: linear-gradient(180deg, rgba(11,16,32,0.9), transparent);
+        }
+        .top-bar h1 { font-size: 17px; font-weight: 600; letter-spacing: 0.3px; }
+        .top-bar h1 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+        .btn-back {
+            background: var(--panel); color: var(--text); border: 1px solid var(--border);
+            border-radius: 8px; padding: 7px 13px; cursor: pointer; font-size: 14px;
+            text-decoration: none; transition: background 0.15s, border-color 0.15s;
+        }
+        .btn-back:hover { background: #1c2740; border-color: var(--accent); }
+        .ws-dot {
+            width: 10px; height: 10px; border-radius: 50%; background: var(--accent-red);
+            box-shadow: 0 0 8px var(--accent-red); transition: background 0.2s, box-shadow 0.2s;
+        }
+        .ws-dot.connected { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+        .gp-badge { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+
+        .panel {
+            position: fixed; z-index: 10; background: var(--panel); border: 1px solid var(--border);
+            border-radius: 12px; padding: 12px 14px; backdrop-filter: blur(8px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+        }
+        .panel h2 {
+            font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+            color: var(--muted); margin-bottom: 9px; font-weight: 600;
+        }
+        /* En-tête interactif des panneaux : poignée de drag + bouton de repli */
+        .panel-head {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            margin-bottom: 9px; cursor: grab; user-select: none; touch-action: none;
+        }
+        .panel-head:active { cursor: grabbing; }
+        .panel-head h2 { margin-bottom: 0; }
+        .panel-toggle {
+            background: #1a2138; color: var(--muted); border: 1px solid var(--border);
+            border-radius: 6px; width: 24px; height: 20px; padding: 0; line-height: 1;
+            font-size: 9px; cursor: pointer; flex-shrink: 0;
+            transition: color 0.12s, border-color 0.12s;
+        }
+        .panel-toggle:hover { color: var(--accent); border-color: var(--accent); }
+        .panel.collapsed .panel-body { display: none; }
+        .panel.collapsed .panel-head { margin-bottom: 0; }
+        .panel.dragging {
+            opacity: 0.92; box-shadow: 0 14px 44px rgba(0, 0, 0, 0.6);
+            transition: none;
+        }
+        /* Panneau physique (sliders inertie + amplitude) */
+        #phys-panel { top: 58px; right: 14px; width: 246px; }
+        .phys-row { margin-bottom: 11px; }
+        .phys-row:last-child { margin-bottom: 2px; }
+        .phys-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+        .phys-head label { font-size: 12px; color: var(--text); }
+        .phys-val { font-size: 12px; color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+        .phys-sub { font-size: 10px; color: var(--muted); margin-top: 4px; line-height: 1.3; }
+        input[type=range].phys-slider {
+            -webkit-appearance: none; appearance: none; width: 100%; height: 6px;
+            border-radius: 3px; background: #1a2138; outline: none; cursor: pointer;
+        }
+        input[type=range].phys-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: var(--accent); border: 2px solid #0b1020;
+            box-shadow: 0 0 6px var(--accent);
+        }
+        input[type=range].phys-slider::-moz-range-thumb {
+            width: 16px; height: 16px; border-radius: 50%; background: var(--accent);
+            border: 2px solid #0b1020; box-shadow: 0 0 6px var(--accent);
+        }
+        /* Panneau boutons d'action (armement, éclairage, reset, vues) */
+        #actions-panel { top: 58px; left: 14px; width: 200px; }
+        .act-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
+        .act-btn {
+            grid-column: span 6;
+            background: #1a2138; color: var(--text); border: 1px solid var(--border);
+            border-radius: 8px; padding: 8px 6px; cursor: pointer; font-size: 13px;
+            font-weight: 600; text-align: center; user-select: none; white-space: nowrap;
+            transition: background 0.12s, border-color 0.12s, box-shadow 0.12s, transform 0.05s;
+        }
+        .act-btn.half { grid-column: span 3; }
+        .act-btn.third { grid-column: span 2; font-size: 12px; }
+        .act-btn:hover { border-color: var(--accent); }
+        .act-btn:active { transform: scale(0.95); background: #223052; }
+        .act-btn.active {
+            border-color: var(--accent); color: var(--accent);
+            background: #14253f; box-shadow: 0 0 8px rgba(53, 208, 186, 0.35);
+        }
+        #btn-arm { border-color: var(--accent-red); color: var(--accent-red); }
+        #btn-arm.armed {
+            border-color: var(--accent); color: #0b1020; background: var(--accent);
+            box-shadow: 0 0 12px rgba(53, 208, 186, 0.55);
+        }
+        .act-sub { font-size: 10px; color: var(--muted); margin-top: 8px; line-height: 1.3; }
+        /* Panneau décor bassin (parois rocheuses + relief du fond) */
+        #decor-panel { top: 334px; left: 14px; width: 200px; }
+        .chk-row {
+            display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+            cursor: pointer; user-select: none; margin-bottom: 10px;
+        }
+        .chk-row:last-child { margin-bottom: 2px; }
+        .chk-row input[type=checkbox] {
+            accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex-shrink: 0;
+        }
+        #decor-tiling-row { margin: 0 0 12px; }
+        #decor-height-row { margin: 10px 0 2px; }
+        #decor-tiling-row.disabled, #decor-height-row.disabled { opacity: 0.45; pointer-events: none; }
+        /* Panneau vie sous-marine (algues + poissons animés) */
+        #life-panel { top: 58px; left: 228px; width: 216px; }
+        #life-panel .phys-row.disabled { opacity: 0.45; pointer-events: none; }
+        /* Panneau simulateur de plongée (profondeur, turbidité, projecteurs LED) */
+        #dive-panel { top: 58px; left: 458px; width: 236px; }
+        #dive-led-intensity-row.disabled, #dive-led-tilt-row.disabled { opacity: 0.45; pointer-events: none; }
+        /* Widget horizon artificiel (HUD roll/pitch + cap + profondeur) */
+        #horizon-panel { bottom: 14px; left: 244px; width: 214px; }
+        #horizon-canvas { display: block; margin: 0 auto; }
+        /* Légende / puissance moteurs */
+        #motors-panel { top: 296px; right: 14px; width: 246px; }
+        .m-group-title { font-size: 11px; color: var(--muted); margin: 8px 0 5px; }
+        .m-group-title:first-of-type { margin-top: 0; }
+        .m-row { display: grid; grid-template-columns: 14px 84px 1fr 40px; align-items: center; gap: 7px; margin-bottom: 5px; }
+        .m-swatch { width: 11px; height: 11px; border-radius: 50%; }
+        .m-swatch.h { background: #ff5a6a; box-shadow: 0 0 6px #ff5a6a; }
+        .m-swatch.v { background: #35d0ba; box-shadow: 0 0 6px #35d0ba; }
+        .m-name { font-size: 12px; white-space: nowrap; }
+        .m-bar { height: 8px; background: #1a2138; border-radius: 4px; overflow: hidden; }
+        .m-bar-fill { height: 100%; width: 0%; border-radius: 4px; transition: width 0.1s linear, background 0.1s; }
+        .m-pct { font-size: 11px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+        /* Consignes 6DOF */
+        #dof-panel { bottom: 14px; left: 14px; width: 220px; }
+        .dof-row { display: grid; grid-template-columns: 58px 1fr 46px; align-items: center; gap: 8px; margin-bottom: 5px; }
+        .dof-label { font-size: 12px; color: var(--muted); }
+        .dof-track { position: relative; height: 8px; background: #1a2138; border-radius: 4px; }
+        .dof-track::before { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: #35405f; }
+        .dof-fill { position: absolute; top: 0; height: 100%; background: var(--accent); border-radius: 4px; }
+        .dof-val { font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+
+        /* Aide contrôles */
+        #help { bottom: 14px; right: 14px; font-size: 11px; color: var(--muted); max-width: 230px; line-height: 1.5; }
+
+        /* Overlay chargement / erreur */
+        #overlay {
+            position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 14px; text-align: center;
+            background: rgba(8, 12, 24, 0.92); padding: 24px;
+        }
+        #overlay.hidden { display: none; }
+        .spinner {
+            width: 44px; height: 44px; border: 4px solid #24304d; border-top-color: var(--accent);
+            border-radius: 50%; animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #overlay .msg { font-size: 15px; }
+        #overlay .sub { font-size: 12px; color: var(--muted); max-width: 460px; line-height: 1.6; }
+        #overlay.error .spinner { display: none; }
+        #overlay.error .msg { color: var(--accent-red); }
+
+        /* Indicateur de (re)génération du maillage du relief abyssal */
+        #terrain-loading {
+            position: fixed; inset: 0; z-index: 40; display: none;
+            align-items: center; justify-content: center; gap: 12px;
+            background: rgba(8, 12, 24, 0.45); font-size: 14px; color: var(--muted);
+        }
+        #terrain-loading .spinner { width: 26px; height: 26px; border-width: 3px; }
+    </style>
+    <!-- Import map Three.js (CDN). Pour un usage 100% hors-ligne, vendoriser
+         ces fichiers sous /static/vendor/three/ et ajuster les URL ci-dessous. -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="scene-container"></div>
+    <div id="terrain-loading"><div class="spinner"></div>Génération du relief abyssal en cours…</div>
+
+    <div class="top-bar">
+        <a class="btn-back" href="/">← Cockpit</a>
+        <h1>🛰️ Visualiseur 3D <small>· test mappage télécommande</small></h1>
+        <span class="ws-dot" id="ws-dot" title="WebSocket télémétrie"></span>
+        <span class="gp-badge" id="gp-badge" title="État manette (Gamepad API)">🎮 —</span>
+    </div>
+
+    <div class="panel" id="phys-panel">
+        <h2>Physique 3D</h2>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="phys-inertia">Inertie / Glissement eau</label>
+                <span class="phys-val" id="phys-inertia-val">0.90</span>
+            </div>
+            <input type="range" class="phys-slider" id="phys-inertia" min="0.01" max="0.99" step="0.01" value="0.90">
+            <div class="phys-sub">0.01 = arrêt net · 0.99 = long glissement</div>
+        </div>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="phys-gain">Amplitude déplacement</label>
+                <span class="phys-val" id="phys-gain-val">1.0×</span>
+            </div>
+            <input type="range" class="phys-slider" id="phys-gain" min="0.1" max="5" step="0.1" value="1">
+            <div class="phys-sub">0.1× = millimétrique · 5.0× = grandes amplitudes</div>
+        </div>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="phys-sens">Sensibilité joysticks</label>
+                <span class="phys-val" id="phys-sens-val">45%</span>
+            </div>
+            <input type="range" class="phys-slider" id="phys-sens" min="0.1" max="1" step="0.05" value="0.45">
+            <div class="phys-sub">10% = très doux · 100% = pleine échelle manette</div>
+        </div>
+    </div>
+
+    <div class="panel" id="actions-panel">
+        <h2>Actions</h2>
+        <div class="act-grid">
+            <button class="act-btn" id="btn-arm" title="Armer / Désarmer les propulseurs">🔒 DÉSARMÉ</button>
+            <button class="act-btn half" id="btn-light" title="Éclairage ON / OFF">💡 Lumière</button>
+            <button class="act-btn half" id="btn-reset" title="Replacer le ROV au centre de la scène">🎯 Centrer</button>
+            <button class="act-btn third" id="btn-view-34" title="Vue trois-quarts">¾</button>
+            <button class="act-btn third" id="btn-view-top" title="Vue de dessus">Haut</button>
+            <button class="act-btn third" id="btn-view-side" title="Vue de côté">Côté</button>
+            <button class="act-btn" id="btn-fpv" title="Basculer vue externe / caméra embarquée à l'avant du ROV">📹 Vue Caméra ROV</button>
+        </div>
+        <div class="act-sub">L'armement autorise l'envoi des consignes aux moteurs réels.</div>
+    </div>
+
+    <div class="panel" id="decor-panel">
+        <h2>Décor bassin</h2>
+        <label class="chk-row" title="Affiche 4 parois verticales rocheuses autour du volume 20×20 m">
+            <input type="checkbox" id="decor-walls"> Parois rocheuses
+        </label>
+        <div class="phys-row" id="decor-tiling-row">
+            <div class="phys-head">
+                <label for="decor-tiling">Répétition texture</label>
+                <span class="phys-val" id="decor-tiling-val">3.0×</span>
+            </div>
+            <input type="range" class="phys-slider" id="decor-tiling" min="1" max="8" step="0.5" value="3">
+        </div>
+        <label class="chk-row" title="Remplace la grille plate par un fond marin en relief (collision incluse)">
+            <input type="checkbox" id="decor-terrain"> Relief rocheux (fond)
+        </label>
+        <div class="phys-row" id="decor-height-row">
+            <div class="phys-head">
+                <label for="decor-height">Hauteur du relief</label>
+                <span class="phys-val" id="decor-height-val">0.90 m</span>
+            </div>
+            <input type="range" class="phys-slider" id="decor-height" min="0" max="10" step="0.1" value="0.9">
+            <div class="phys-sub">0 = fond quasi plat · 10 m = pics / stalagmites géantes</div>
+        </div>
+    </div>
+
+    <div class="panel" id="life-panel">
+        <h2>Vie sous-marine</h2>
+        <label class="chk-row" title="Algues ondulantes + coraux, dômes et anémones colorés ancrés sur le plateau récifal (0 / -20 m)">
+            <input type="checkbox" id="life-algae"> Flore : algues &amp; coraux du récif
+        </label>
+        <div class="phys-row" id="life-algae-count-row">
+            <div class="phys-head">
+                <label for="life-algae-count">Densité des algues</label>
+                <span class="phys-val" id="life-algae-count-val">40 %</span>
+            </div>
+            <input type="range" class="phys-slider" id="life-algae-count" min="0" max="100" step="1" value="40">
+            <div class="phys-sub">Quantité de brins au m² (suit l'étendue du plateau)</div>
+        </div>
+        <div class="phys-row" id="life-algae-len-row">
+            <div class="phys-head">
+                <label for="life-algae-len">Longueur des algues</label>
+                <span class="phys-val" id="life-algae-len-val">1.0×</span>
+            </div>
+            <input type="range" class="phys-slider" id="life-algae-len" min="0.3" max="3" step="0.1" value="1">
+            <div class="phys-sub">Mélange conservé de petits et grands brins</div>
+        </div>
+        <div class="phys-row" id="life-current-row">
+            <div class="phys-head">
+                <label for="life-current">Intensité du courant</label>
+                <span class="phys-val" id="life-current-val">50%</span>
+            </div>
+            <input type="range" class="phys-slider" id="life-current" min="0" max="100" step="5" value="50">
+            <div class="phys-sub">Amplitude et vitesse de l'ondulation des algues</div>
+        </div>
+        <label class="chk-row" title="Banc de poissons colorés sur le récif, créatures bioluminescentes et brochets géants dans la fosse abyssale">
+            <input type="checkbox" id="life-fish"> Faune : poissons, créatures &amp; prédateurs
+        </label>
+        <div class="phys-row" id="life-fish-count-row">
+            <div class="phys-head">
+                <label for="life-fish-count">Banc de récif (poissons)</label>
+                <span class="phys-val" id="life-fish-count-val">360</span>
+            </div>
+            <input type="range" class="phys-slider" id="life-fish-count" min="0" max="500" step="10" value="360">
+            <div class="phys-sub">Poissons-clowns, chirurgiens… 5-10 bancs répartis sur tout le plateau (0 / -20 m)</div>
+        </div>
+        <div class="phys-row" id="life-fish-speed-row">
+            <div class="phys-head">
+                <label for="life-fish-speed">Vitesse / Activité</label>
+                <span class="phys-val" id="life-fish-speed-val">1.0×</span>
+            </div>
+            <input type="range" class="phys-slider" id="life-fish-speed" min="0.1" max="3" step="0.1" value="1">
+            <div class="phys-sub">Le banc fuit si le ROV approche à moins de 2 m</div>
+        </div>
+        <div class="phys-row" id="life-reef-density-row">
+            <div class="phys-head">
+                <label for="life-reef-density">Densité récif (0 / -20 m)</label>
+                <span class="phys-val" id="life-reef-density-val">80%</span>
+            </div>
+            <input type="range" class="phys-slider" id="life-reef-density" min="0" max="100" step="5" value="80">
+            <div class="phys-sub">Coraux, anémones &amp; tapis au m² (barrière dense, constante quelle que soit la taille) — réduire pour gagner des FPS</div>
+        </div>
+        <div class="phys-row" id="life-abyss-density-row">
+            <div class="phys-head">
+                <label for="life-abyss-density">Densité abysses (fosse)</label>
+                <span class="phys-val" id="life-abyss-density-val">60%</span>
+            </div>
+            <input type="range" class="phys-slider" id="life-abyss-density" min="0" max="100" step="5" value="60">
+            <div class="phys-sub">Créatures bioluminescentes ; à 0 % les brochets géants disparaissent aussi</div>
+        </div>
+    </div>
+
+    <div class="panel" id="motors-panel">
+        <h2>Puissance moteurs (M1–M8)</h2>
+        <div class="m-group-title">🔴 Horizontaux</div>
+        <div id="motors-horizontal"></div>
+        <div class="m-group-title">🟢 Verticaux</div>
+        <div id="motors-vertical"></div>
+    </div>
+
+    <div class="panel" id="dof-panel">
+        <h2>Consignes 6DOF</h2>
+        <div id="dof-rows"></div>
+    </div>
+
+    <div class="panel" id="dive-panel">
+        <h2>Simulateur de plongée</h2>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="dive-depth">Profondeur du fond (bassin)</label>
+                <span class="phys-val" id="dive-depth-val">30 m</span>
+            </div>
+            <input type="range" class="phys-slider" id="dive-depth" min="5" max="300" step="1" value="30">
+            <div class="phys-sub">Fond de la fosse abyssale. Plateau corallien périphérique à −20 m (relief du fond activé). Le ROV démarre en surface (Y = 0 m).</div>
+        </div>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="dive-extent">Largeur / Étendue de la zone</label>
+                <span class="phys-val" id="dive-extent-val">100 m</span>
+            </div>
+            <input type="range" class="phys-slider" id="dive-extent" min="20" max="1000" step="5" value="100">
+            <div class="phys-sub">Auto : suit la profondeur — max(100 m, prof. × 1,5) — tant que non modifié manuellement</div>
+        </div>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="dive-visibility">Visibilité / Turbidité</label>
+                <span class="phys-val" id="dive-visibility-val">25 m</span>
+            </div>
+            <input type="range" class="phys-slider" id="dive-visibility" min="1" max="60" step="1" value="25">
+            <div class="phys-sub">1 m = eau très chargée · 60 m = eau cristalline</div>
+        </div>
+        <label class="chk-row" title="Allume les deux projecteurs LED du module projecteur.glb">
+            <input type="checkbox" id="dive-led"> Projecteurs LED (ON/OFF)
+        </label>
+        <div class="phys-row" id="dive-led-intensity-row">
+            <div class="phys-head">
+                <label for="dive-led-intensity">Intensité lumineuse</label>
+                <span class="phys-val" id="dive-led-intensity-val">80%</span>
+            </div>
+            <input type="range" class="phys-slider" id="dive-led-intensity" min="0" max="100" step="5" value="80">
+        </div>
+        <div class="phys-row" id="dive-led-tilt-row">
+            <div class="phys-head">
+                <label for="dive-led-tilt">Tilt projecteurs</label>
+                <span class="phys-val" id="dive-led-tilt-val">+12°</span>
+            </div>
+            <input type="range" class="phys-slider" id="dive-led-tilt" min="-60" max="60" step="1" value="12">
+            <div class="phys-sub">Négatif = relevé vers la surface · positif = piqué vers le fond</div>
+        </div>
+    </div>
+
+    <div class="panel" id="horizon-panel">
+        <h2>Horizon artificiel</h2>
+        <canvas id="horizon-canvas"></canvas>
+    </div>
+
+    <div class="panel" id="help">
+        🖱️ <b>Glisser</b> : orbite &nbsp;·&nbsp; <b>Molette</b> : zoom &nbsp;·&nbsp; <b>Clic droit</b> : déplacer<br>
+        Le modèle s'incline selon roll/pitch/yaw ; les repères pulsent selon la puissance moteur.
+    </div>
+
+    <div id="overlay">
+        <div class="spinner"></div>
+        <div class="msg" id="overlay-msg">Chargement du modèle 3D…</div>
+        <div class="sub" id="overlay-sub">bob_rov_3D.glb</div>
+    </div>
+
+    <script type="module" src="/js/mapping3d.js"></script>
+</body>
+</html>

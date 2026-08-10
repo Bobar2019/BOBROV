@@ -1,0 +1,17 @@
+{
+    "name": "Mission",
+    "description": "",
+    "loop": false,
+    "steps": [
+        {
+            "time": 0.0,
+            "action": "depth",
+            "value": -12
+        },
+        {
+            "time": 30.0,
+            "action": "depth",
+            "value": -12
+        }
+    ]
+}

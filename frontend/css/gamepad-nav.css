@@ -1,0 +1,357 @@
+/* ========== NAVIGATION PAR MANETTE ========== */
+
+/* Tuile sélectionnée par la manette */
+.nav-tile.gp-selected {
+    border-color: #00d4ff;
+    box-shadow: 0 0 25px rgba(0, 212, 255, 0.3), inset 0 0 15px rgba(0, 212, 255, 0.05);
+    transform: translateY(-3px) scale(1.02);
+}
+
+.nav-tile.gp-selected svg {
+    color: #00d4ff;
+}
+
+/* Indicateur de navigation en bas de l'écran */
+.gamepad-nav-bar {
+    position: fixed;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1001;
+    display: none; /* Affiché quand manette connectée */
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-card, #1a1b23);
+    border: 1px solid var(--border-color, #2a2b35);
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 0.75rem;
+    color: var(--text-secondary, #8a8b95);
+    backdrop-filter: blur(10px);
+}
+
+.gamepad-nav-bar.visible {
+    display: flex;
+}
+
+.gamepad-nav-bar .nav-hint {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.gamepad-nav-bar .nav-key {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+/* Menu contextuel (Triangle) */
+.gamepad-context-menu {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10000;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--bg-card, #1a1b23);
+    border: 1px solid var(--border-color, #2a2b35);
+    border-radius: 12px;
+    padding: 12px;
+    min-width: 250px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.gamepad-context-menu.visible {
+    display: flex;
+}
+
+.gamepad-context-menu .ctx-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    color: var(--text-primary, #e0e0e0);
+    font-size: 0.85rem;
+}
+
+.gamepad-context-menu .ctx-item:hover,
+.gamepad-context-menu .ctx-item.gp-selected {
+    background: rgba(0, 212, 255, 0.1);
+}
+
+.gamepad-context-menu .ctx-item .ctx-value {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #8a8b95);
+}
+
+.gamepad-context-menu .ctx-title {
+    text-align: center;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    padding: 4px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 4px;
+}
+
+/* ========== MODE APPRENTISSAGE MAPPING ========== */
+
+/* Bannière Learn Mode */
+.gp-learn-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(100, 50, 255, 0.1));
+    border: 1px solid rgba(0, 212, 255, 0.4);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    animation: learn-pulse-bg 1.5s ease-in-out infinite;
+}
+
+.gp-learn-banner.hidden {
+    display: none;
+}
+
+@keyframes learn-pulse-bg {
+    0%, 100% { background: linear-gradient(135deg, rgba(0, 212, 255, 0.12), rgba(100, 50, 255, 0.08)); }
+    50% { background: linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(100, 50, 255, 0.18)); }
+}
+
+.gp-learn-pulse {
+    width: 12px;
+    height: 12px;
+    background: #00d4ff;
+    border-radius: 50%;
+    animation: pulse-dot 1s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.5; }
+}
+
+.gp-learn-banner #gp-learn-msg {
+    flex: 1;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #00d4ff;
+}
+
+.gp-learn-cancel-btn {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border: 1px solid rgba(255,100,100,0.4);
+    background: rgba(255,80,80,0.15);
+    color: #ff6b6b;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.gp-learn-cancel-btn:hover {
+    background: rgba(255,80,80,0.3);
+    border-color: #ff6b6b;
+}
+
+/* Onglets */
+.gp-mapping-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border-color, #2a2b35);
+    margin-bottom: 12px;
+}
+
+.gp-tab {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-secondary, #8a8b95);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.gp-tab:hover {
+    color: var(--text-primary, #e0e0e0);
+    background: rgba(255,255,255,0.03);
+}
+
+.gp-tab.active {
+    color: #00d4ff;
+    border-bottom-color: #00d4ff;
+}
+
+.gp-tab-panel {
+    min-height: 80px;
+}
+
+.gp-tab-panel.hidden {
+    display: none;
+}
+
+/* Liste des fonctions (panneau Fonctions) */
+.gp-func-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #8a8b95);
+    margin: 0 0 10px 0;
+    font-style: italic;
+}
+
+.gp-functions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.gp-func-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 0.82rem;
+    color: var(--text-primary, #e0e0e0);
+}
+
+.gp-func-item:hover {
+    background: rgba(0, 212, 255, 0.08);
+    border-color: rgba(0, 212, 255, 0.25);
+}
+
+.gp-func-item.selected {
+    background: rgba(0, 212, 255, 0.15);
+    border-color: #00d4ff;
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+}
+
+.gp-func-item .gp-func-label {
+    flex: 1;
+}
+
+.gp-func-item .gp-func-assigned {
+    font-size: 0.7rem;
+    color: var(--text-secondary, #8a8b95);
+    padding: 2px 8px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+/* Ligne de mapping (bouton/axe) cliquable pour ré-attribution */
+.mapping-row.clickable {
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    padding-left: 10px;
+}
+
+.mapping-row.clickable:hover {
+    border-left-color: #00d4ff;
+    background: rgba(0, 212, 255, 0.06);
+}
+
+.mapping-row.highlight {
+    animation: row-flash 0.6s ease-out;
+}
+
+@keyframes row-flash {
+    0% { background: rgba(0, 212, 255, 0.3); }
+    100% { background: transparent; }
+}
+
+/* ========== MODAL PROFIL ========== */
+.gp-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    backdrop-filter: blur(4px);
+}
+
+.gp-modal-overlay.hidden {
+    display: none;
+}
+
+.gp-modal {
+    background: var(--bg-card, #1a1b23);
+    border: 1px solid var(--border-color, #2a2b35);
+    border-radius: 14px;
+    padding: 24px;
+    min-width: 340px;
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.gp-modal h3 {
+    margin: 0 0 18px 0;
+    font-size: 1.1rem;
+    color: var(--text-primary, #e0e0e0);
+}
+
+.gp-modal-body .control-group {
+    margin-bottom: 14px;
+}
+
+.gp-modal-body .control-group label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #8a8b95);
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.gp-modal-body .control-group input,
+.gp-modal-body .control-group select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color, #2a2b35);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    color: var(--text-primary, #e0e0e0);
+    font-size: 0.85rem;
+    box-sizing: border-box;
+}
+
+.gp-modal-body .control-group input:focus,
+.gp-modal-body .control-group select:focus {
+    outline: none;
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15);
+}
+
+.gp-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.gp-modal-actions .btn-accent {
+    padding: 8px 20px;
+}
+
+.gp-modal-actions .btn-sm {
+    padding: 8px 16px;
+}

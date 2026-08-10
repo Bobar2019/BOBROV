@@ -1,0 +1,9 @@
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+websockets>=12.0
+opencv-python-headless>=4.8.0
+numpy>=1.26.0
+smbus2>=0.4.3
+pyserial>=3.5
+python-multipart>=0.0.6
+aiofiles>=23.2.0

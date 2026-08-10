@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BOB-ROV</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/gamepad.css">
+    <link rel="stylesheet" href="css/goggle.css">
+    <link rel="stylesheet" href="css/gamepad-nav.css">
+</head>
+<body class="theme-night">
+    <div class="app-container">
+        <!-- ========== HEADER + NAVIGATION GRILLE ========== -->
+        <header class="index-header" id="nav-home">
+            <div class="header-content">
+                <h1>🚀 BOB-ROV</h1>
+                <p>Cockpit de pilotage sous-marin</p>
+            </div>
+            <nav class="nav-grid">
+                <button class="nav-tile" data-tile="dashboard" onclick="App.switchTile('dashboard')">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                    </svg>
+                    <span>Dashboard</span>
+                </button>
+                <button class="nav-tile" data-tile="cockpit" onclick="App.switchTile('cockpit')">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="M12 3v18M3 12h18"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span>Cockpit</span>
+                </button>
+                <button class="nav-tile" data-tile="config-osd" onclick="App.switchTile('config-osd')">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="2" y="3" width="20" height="14" rx="2"/>
+                        <path d="M8 21h8M12 17v4"/>
+                        <path d="M6 8h4M6 11h8"/>
+                    </svg>
+                    <span>Config OSD</span>
+                </button>
+                <button class="nav-tile" data-tile="config-cam" onclick="App.switchTile('config-cam')">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="2" y="5" width="20" height="14" rx="2"/>
+                        <circle cx="12" cy="12" r="4"/>
+                        <circle cx="12" cy="12" r="1.5"/>
+                    </svg>
+                    <span>Config Caméra</span>
+                </button>
+                <button class="nav-tile" data-tile="galerie" onclick="App.switchTile('galerie')">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <path d="M3 15l5-5 4 4 5-5 4 4"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                    </svg>
+                    <span>Galerie</span>
+                </button>
+                <button class="nav-tile" data-tile="simulation" onclick="App.switchTile('simulation')">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9 3v18l12-9L9 3z"/>
+                    </svg>
+                    <span>Simulation</span>
+                </button>
+                <button class="nav-tile" data-tile="config-manette" onclick="App.switchTile('config-manette')">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M6 11h4M8 9v4"/>
+                        <circle cx="16" cy="10" r="1"/>
+                        <circle cx="18" cy="12" r="1"/>
+                        <path d="M4 17c0 2 1 3 3 3h1l2-3h4l2 3h1c2 0 3-1 3-3V9c0-3-2-5-5-5H9C6 4 4 6 4 9v8z"/>
+                    </svg>
+                    <span>Config Manette</span>
+                </button>
+                <button class="nav-tile" data-tile="mapping3d" onclick="window.location.href='/mapping3d'">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2l9 5v10l-9 5-9-5V7l9-5z"/>
+                        <path d="M12 2v20M3 7l9 5 9-5"/>
+                    </svg>
+                    <span>Visualiseur 3D</span>
+                </button>
+            </nav>
+        </header>
+
+        <!-- Bouton retour vers l'accueil (visible quand un panneau est ouvert) -->
+        <button class="btn-back" id="btn-back-home" onclick="App.goHome()">← Accueil</button>
+
+        <!-- Status bar flottante (thème, WebSocket, FPS, SIM) -->
+        <div class="status-bar-float" id="status-bar-float">
+            <button class="theme-toggle" id="btn-theme" title="Basculer Jour/Nuit">🌙</button>
+            <span class="status-dot" id="ws-status" title="WebSocket">●</span>
+            <span id="nav-fps">FPS: --</span>
+            <span id="nav-sim" class="badge-sim">SIM</span>
+        </div>
+
+        <!-- ========== CONTENU PRINCIPAL ========== -->
+        <main class="main-content">
+
+            <!-- ===== TUILE 1: DASHBOARD ===== -->
+            <section class="tile-panel" id="tile-dashboard">
+                <h2 class="tile-title">Dashboard / Informations Système</h2>
+                <div class="dashboard-grid">
+                    <div class="info-card">
+                        <h3>🖥 Processeur</h3>
+                        <div class="metric"><span class="metric-label">Température SoC</span><span class="metric-value" id="cpu-temp">--</span></div>
+                        <div class="metric"><span class="metric-label">Charge (1min)</span><span class="metric-value" id="cpu-load">--</span></div>
+                    </div>
+                    <div class="info-card">
+                        <h3>💾 Mémoire</h3>
+                        <div class="metric"><span class="metric-label">Utilisation RAM</span><span class="metric-value" id="mem-used">--</span></div>
+                        <div class="progress-bar"><div class="progress-fill" id="mem-bar" style="width:0%"></div></div>
+                    </div>
+                    <div class="info-card">
+                        <h3>💿 Stockage</h3>
+                        <div class="metric"><span class="metric-label">Disque libre</span><span class="metric-value" id="disk-free">--</span></div>
+                    </div>
+                    <div class="info-card">
+                        <h3>📷 Caméra</h3>
+                        <div class="metric"><span class="metric-label">État</span><span class="metric-value" id="cam-status">--</span></div>
+                        <div class="metric"><span class="metric-label">FPS vidéo</span><span class="metric-value" id="cam-fps">--</span></div>
+                    </div>
+                    <div class="info-card">
+                        <h3>🌐 Réseau</h3>
+                        <div class="metric"><span class="metric-label">WebSocket</span><span class="metric-value" id="net-ws">--</span></div>
+                    </div>
+                    <div class="info-card">
+                        <h3>📡 Capteurs</h3>
+                        <div class="metric"><span class="metric-label">Mode</span><span class="metric-value" id="sensor-mode">--</span></div>
+                        <div class="metric"><span class="metric-label">Profondeur</span><span class="metric-value" id="dash-depth">--</span></div>
+                        <div class="metric"><span class="metric-label">Température</span><span class="metric-value" id="dash-temp">--</span></div>
+                        <div class="metric"><span class="metric-label">Pression</span><span class="metric-value" id="dash-pressure">--</span></div>
+                        <div class="metric"><span class="metric-label">GY-91 (IMU)</span><span class="metric-value" id="dash-gy91">--</span></div>
+                    </div>
+                    <div class="info-card">
+                        <h3>🧭 Centrale inertielle (IMU)</h3>
+                        <div class="metric"><span class="metric-label">Capteur actif</span><span class="metric-value" id="imu-sensor-name">--</span></div>
+                        <div class="metric"><span class="metric-label">Adresse I2C</span><span class="metric-value" id="imu-i2c-addr">--</span></div>
+                        <div class="metric"><span class="metric-label">État</span><span class="metric-value" id="imu-health">--</span></div>
+                        <div class="metric"><span class="metric-label">Roll / Pitch / Yaw</span><span class="metric-value" id="imu-orientation">--</span></div>
+                        <div class="metric"><span class="metric-label">Accél. (g)</span><span class="metric-value" id="imu-accel">--</span></div>
+                        <div class="imu-alert" id="imu-alert" style="display:none; color:#ff6b35; font-size:0.85em; margin:6px 0;">⚠ --</div>
+                        <div class="metric" style="margin-top:8px;">
+                            <span class="metric-label">Changer de capteur</span>
+                            <select id="imu-sensor-select" style="max-width:130px;">
+                                <option value="QMI8658">QMI8658</option>
+                                <option value="GY91">GY91</option>
+                                <option value="ADXL345">ADXL345</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary btn-sm" id="btn-imu-apply" onclick="App.applyImuSensor()">✅ Appliquer</button>
+                    </div>
+                    <div class="info-card">
+                        <h3>🔧 Capteurs individuels</h3>
+                        <p class="hint">Activez/désactivez chaque capteur (simulé ↔ réel)</p>
+                        <div class="sensor-toggle-grid">
+                            <label class="sensor-toggle">
+                                <span class="sensor-label">📐 Roulis</span>
+                                <input type="checkbox" id="sens-roll" checked data-sensor="roll">
+                                <span class="sensor-status" id="sens-roll-status">SIM</span>
+                            </label>
+                            <label class="sensor-toggle">
+                                <span class="sensor-label">📏 Tangage</span>
+                                <input type="checkbox" id="sens-pitch" checked data-sensor="pitch">
+                                <span class="sensor-status" id="sens-pitch-status">SIM</span>
+                            </label>
+                            <label class="sensor-toggle">
+                                <span class="sensor-label">🌊 Profondeur</span>
+                                <input type="checkbox" id="sens-depth" checked data-sensor="depth">
+                                <span class="sensor-status" id="sens-depth-status">SIM</span>
+                            </label>
+                            <label class="sensor-toggle">
+                                <span class="sensor-label">🌡️ Température</span>
+                                <input type="checkbox" id="sens-temperature" checked data-sensor="temperature">
+                                <span class="sensor-status" id="sens-temperature-status">SIM</span>
+                            </label>
+                            <label class="sensor-toggle">
+                                <span class="sensor-label">🧭 Cap</span>
+                                <input type="checkbox" id="sens-heading" checked data-sensor="heading">
+                                <span class="sensor-status" id="sens-heading-status">SIM</span>
+                            </label>
+                            <label class="sensor-toggle">
+                                <span class="sensor-label">🔋 Batterie</span>
+                                <input type="checkbox" id="sens-battery" checked data-sensor="battery">
+                                <span class="sensor-status" id="sens-battery-status">SIM</span>
+                            </label>
+                        </div>
+                        <div class="sensor-hw-status">
+                            <h4>Matériel détecté</h4>
+                            <div id="sensor-hw-list"></div>
+                        </div>
+                        <div class="sensor-adxl-section">
+                            <label class="sensor-toggle sensor-toggle-wide">
+                                <span class="sensor-label">⚡ ADXL345 (I2C 0x53)</span>
+                                <input type="checkbox" id="sens-adxl345">
+                                <span class="sensor-status" id="sens-adxl345-status">OFF</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="info-card info-card-wifi">
+                        <h3>📶 Configuration Wi-Fi</h3>
+                        <div class="metric"><span class="metric-label">Réseau</span><span class="metric-value" id="wifi-ssid">--</span></div>
+                        <div class="metric"><span class="metric-label">Adresse IP</span><span class="metric-value" id="wifi-ip">--</span></div>
+                        <div class="metric"><span class="metric-label">Signal</span><span class="metric-value" id="wifi-signal">--</span></div>
+                        <button class="btn btn-primary btn-sm wifi-manage-btn" id="btn-wifi-manage" onclick="WifiManager.openModal()">📶 Gérer / Scanner les réseaux</button>
+                    </div>
+                    <div class="info-card info-card-system">
+                        <h3>⏻ Système</h3>
+                        <button class="btn-reboot" id="btn-reboot" onclick="App.confirmReboot()">🔄 Redémarrer le Pi</button>
+                    </div>
+                    <div class="config-card">
+                        <h3>📊 État des fonctions</h3>
+                        <div id="action-status-panel"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== TUILE 2: COCKPIT ===== -->
+            <section class="tile-panel" id="tile-cockpit">
+                <div class="cockpit-layout">
+                    <div class="video-container">
+                        <img id="video-stream" src="/video_feed" alt="Flux vidéo">
+                        <canvas id="osd-canvas"></canvas>
+                    </div>
+                    <div class="control-panel">
+                        <h3>Commandes</h3>
+                        <div class="control-group">
+                            <button class="btn btn-danger" id="btn-arm">🔓 ARMER</button>
+                            <button class="btn btn-success" id="btn-disarm">🔒 DÉSARMER</button>
+                        </div>
+                        <div class="control-group autopilot-group">
+                            <label>Auto-Pilote (ESP32)</label>
+                            <div class="autopilot-selector">
+                                <button class="btn-autopilot active" id="btn-ap-1" data-ap-mode="1" title="Pilotage manuel, stabilisation désactivée">🕹️ PASSIF</button>
+                                <button class="btn-autopilot" id="btn-ap-2" data-ap-mode="2" title="Stabilisation automatique du roulis">⚖️ AUTO-ROULIS</button>
+                                <button class="btn-autopilot" id="btn-ap-3" data-ap-mode="3" title="Stabilisation complète">🎯 AUTO-FULL</button>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="light-slider">Éclairage LED</label>
+                            <input type="range" id="light-slider" min="0" max="100" value="0">
+                            <span id="light-value">0%</span>
+                        </div>
+                        <div class="control-group record-group">
+                            <h4>📸 Enregistrement</h4>
+                            <div class="record-buttons">
+                                <button class="btn btn-record" id="btn-record-start" title="Démarrer l'enregistrement vidéo">🔴 REC</button>
+                                <button class="btn btn-record-stop" id="btn-record-stop" disabled title="Arrêter l'enregistrement">⏹ STOP</button>
+                                <button class="btn btn-photo" id="btn-photo" title="Prendre une photo">📷 PHOTO</button>
+                            </div>
+                            <div class="record-osd-toggles">
+                                <label class="toggle-label toggle-sm"><input type="checkbox" id="cfg-record-video-osd" checked> OSD sur vidéo</label>
+                                <label class="toggle-label toggle-sm"><input type="checkbox" id="cfg-record-photo-osd" checked> OSD sur photo</label>
+                            </div>
+                            <div class="record-status" id="record-status">
+                                <span id="record-indicator" class="record-dot"></span>
+                                <span id="record-info">Prêt</span>
+                            </div>
+                        </div>
+                        <div class="telemetry-quick">
+                            <div class="tq-item"><span class="tq-label">Prof.</span><span class="tq-value" id="tq-depth">0.0m</span></div>
+                            <div class="tq-item"><span class="tq-label">Temp.</span><span class="tq-value" id="tq-temp">20.0°C</span></div>
+                            <div class="tq-item"><span class="tq-label">Cap</span><span class="tq-value" id="tq-heading">000°</span></div>
+                            <div class="tq-item"><span class="tq-label">Batt.</span><span class="tq-value" id="tq-battery">100%</span></div>
+                            <div class="tq-item"><span class="tq-label">Roulis</span><span class="tq-value" id="tq-roll">0.0°</span></div>
+                            <div class="tq-item"><span class="tq-label">Tangage</span><span class="tq-value" id="tq-pitch">0.0°</span></div>
+                            <div class="tq-item"><span class="tq-label">Press.</span><span class="tq-value" id="tq-pressure">1013 hPa</span></div>
+                        </div>
+                        <!-- Propulseurs M1..M8 (2 blocs, alimentés par la télémétrie WS) -->
+                        <div class="motors-panel">
+                            <div class="motors-group">
+                                <h4 class="motors-group-title">↔️ Propulsion Horizontale</h4>
+                                <div id="motors-horizontal" class="motors-bars"></div>
+                            </div>
+                            <div class="motors-group">
+                                <h4 class="motors-group-title">↕️ Propulsion Verticale</h4>
+                                <div id="motors-vertical" class="motors-bars"></div>
+                            </div>
+                        </div>
+                        <div class="gamepad-status"><span id="gp-status">🎮 Manette: non connectée</span></div>
+                        <div class="esp32-status"><span id="esp32-status" class="esp32-badge disconnected">🔌 ESP32: —</span></div>
+                        <div class="esp32-status"><span id="gy91-status" class="esp32-badge disconnected">🧭 IMU: —</span></div>
+                        <div class="control-group" style="margin-top:10px;">
+                            <button class="btn-sm" id="btn-goggle" onclick="Goggle.activate()" title="Mode Lunette (G)">🥽 Mode Lunette</button>
+                        </div>
+                        <div class="rov-status-indicator">
+                            <span id="rov-status-badge" class="status-badge" title="État des fonctions">Chargement...</span>
+                        </div>
+
+                        <!-- Panneau réglages caméra rapides -->
+                        <div class="cockpit-cam-panel">
+                            <h4>📷 Réglages caméra rapides</h4>
+                            <div class="cockpit-cam-indicator">
+                                <span class="cam-dot active" id="cockpit-cam-dot"></span>
+                                <span id="cockpit-cam-device">/dev/video0</span>
+                            </div>
+                            <div class="cam-quick-row">
+                                <label>Luminosité</label>
+                                <input type="range" id="cockpit-brightness" min="-10" max="10" value="0">
+                                <span id="cockpit-brightness-val">0</span>
+                            </div>
+                            <div class="cam-quick-row">
+                                <label>Contraste</label>
+                                <input type="range" id="cockpit-contrast" min="1" max="32" value="16">
+                                <span id="cockpit-contrast-val">16</span>
+                            </div>
+                            <div class="cam-quick-actions">
+                                <button class="btn btn-secondary btn-sm" id="btn-cockpit-swap" title="Inverser caméra principale et PiP">🔄 Inverser caméras</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== TUILE 3: GALERIE ===== -->
+            <section class="tile-panel" id="tile-galerie">
+                <h2 class="tile-title">Galerie — Enregistrements Vidéo &amp; Photo</h2>
+                <div class="galerie-toolbar">
+                    <button class="btn btn-secondary btn-sm" id="btn-refresh-recordings">🔄 Rafraîchir</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-download-selected" disabled title="Télécharger la sélection">⬇ Télécharger</button>
+                    <button class="btn btn-danger btn-sm" id="btn-delete-selected" disabled title="Supprimer la sélection">🗑 Supprimer</button>
+                    <span class="galerie-count" id="galerie-count"></span>
+                </div>
+                <table class="recordings-table" id="recordings-table">
+                    <thead>
+                        <tr>
+                            <th class="col-check"><input type="checkbox" id="chk-select-all" title="Tout sélectionner"></th>
+                            <th class="col-type">Type</th>
+                            <th class="col-name">Fichier</th>
+                            <th class="col-size">Taille</th>
+                            <th class="col-date">Date</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recordings-list">
+                        <tr><td colspan="6" class="hint-cell">Aucun enregistrement</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- ===== TUILE 3: CONFIG OSD ===== -->
+            <section class="tile-panel" id="tile-config-osd">
+                <h2 class="tile-title">Configuration OSD / Affichage tête haute</h2>
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h3>Éléments visibles</h3>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-horizon" checked> Horizon artificiel</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-depth" checked> Jauge de profondeur</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-temperature" checked> Température</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-battery" checked> Batterie</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-compass" checked> Cap / Boussole</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-fps" checked> FPS</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-show-motors" checked> Propulseurs</label>
+                    </div>
+                    <div class="config-card">
+                        <h3>Couleurs</h3>
+                        <label>Horizon <input type="color" id="cfg-horizon-color" value="#00FF88"></label>
+                        <label>Profondeur <input type="color" id="cfg-depth-color" value="#00AAFF"></label>
+                        <label>Température <input type="color" id="cfg-temperature-color" value="#FFAA00"></label>
+                        <label>Cap <input type="color" id="cfg-compass-color" value="#FFFFFF"></label>
+                        <label>Batterie <input type="color" id="cfg-battery-color" value="#00CC44"></label>
+                        <label>FPS <input type="color" id="cfg-fps-color" value="#FFFFFF"></label>
+                        <label>Couleur primaire <input type="color" id="cfg-primary-color" value="#00FF00"></label>
+                    </div>
+                    <div class="config-card">
+                        <h3>Apparence</h3>
+                        <label>Transparence OSD (globale) <input type="range" id="cfg-opacity" min="0" max="100" value="100"><span id="opacity-val">100%</span></label>
+                        <label>Transparence Profondeur <input type="range" id="cfg-depth-opacity" min="10" max="100" value="100"><span id="depth-opacity-val">100%</span></label>
+                        <label>Transparence Température <input type="range" id="cfg-temperature-opacity" min="10" max="100" value="100"><span id="temperature-opacity-val">100%</span></label>
+                        <label>Transparence Cap <input type="range" id="cfg-compass-opacity" min="10" max="100" value="100"><span id="compass-opacity-val">100%</span></label>
+                        <label>Transparence Batterie <input type="range" id="cfg-battery-opacity" min="10" max="100" value="100"><span id="battery-opacity-val">100%</span></label>
+                        <label>Transparence Propulseurs <input type="range" id="cfg-motors-opacity" min="10" max="100" value="100"><span id="motors-opacity-val">100%</span></label>
+                        <label>Taille police <input type="range" id="cfg-font-scale" min="0.4" max="1.5" step="0.1" value="0.8"><span id="font-scale-value">0.8</span></label>
+                    </div>
+                    <div class="config-card">
+                        <h3>Horizon artificiel</h3>
+                        <label>Épaisseur traits <input type="range" id="cfg-horizon-line-thick" min="1" max="10" step="0.5" value="2"><span id="horizon-line-thick-val">2px</span></label>
+                        <label>Opacité cercle <input type="range" id="cfg-horizon-circle-opacity" min="0" max="100" value="15"><span id="horizon-circle-opacity-val">15%</span></label>
+                        <label>Opacité bordure <input type="range" id="cfg-horizon-border-opacity" min="0" max="100" value="25"><span id="horizon-border-opacity-val">25%</span></label>
+                        <label>Taille rayon (%) <input type="range" id="cfg-horizon-radius-pct" min="8" max="40" value="18"><span id="horizon-radius-pct-val">18%</span></label>
+                        <label>Amplif. tangage <input type="range" id="cfg-horizon-pitch-scale" min="1" max="5" value="2"><span id="horizon-pitch-scale-val">2x</span></label>
+                        <label>Amortissement <input type="range" id="cfg-horizon-damping" min="1" max="10" value="5"><span id="horizon-damping-val">5</span></label>
+                        <label>Couleur ailes <input type="color" id="cfg-horizon-wing-color" value="#FFFF00"></label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-horizon-show-text" checked> Texte Roulis/Tangage</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-horizon-clip"> Masquer les traits hors du cercle</label>
+                    </div>
+                    <div class="config-card">
+                        <h3>Positions (%)</h3>
+                        <p class="hint">Position en pourcentage de la taille de la vidéo (0-100).</p>
+                        <label>Horizon X <input type="number" id="cfg-horizon-x" min="0" max="100" value="50"></label>
+                        <label>Horizon Y <input type="number" id="cfg-horizon-y" min="0" max="100" value="50"></label>
+                        <label>Profondeur X <input type="number" id="cfg-depth-x" min="0" max="100" value="3"></label>
+                        <label>Profondeur Y <input type="number" id="cfg-depth-y" min="0" max="100" value="15"></label>
+                        <label>Temp. X <input type="number" id="cfg-temperature-x" min="0" max="100" value="88"></label>
+                        <label>Temp. Y <input type="number" id="cfg-temperature-y" min="0" max="100" value="5"></label>
+                        <label>Boussole X <input type="number" id="cfg-compass-x" min="0" max="100" value="50"></label>
+                        <label>Boussole Y <input type="number" id="cfg-compass-y" min="0" max="100" value="92"></label>
+                        <label>Batterie X <input type="number" id="cfg-battery-x" min="0" max="100" value="88"></label>
+                        <label>Batterie Y <input type="number" id="cfg-battery-y" min="0" max="100" value="12"></label>
+                    </div>
+                </div>
+                <div class="config-actions">
+                    <button class="btn btn-primary" id="btn-save-osd">💾 Appliquer</button>
+                    <button class="btn btn-secondary" id="btn-reset-osd">↺ Réinitialiser par défaut</button>
+                </div>
+            </section>
+
+            <!-- ===== TUILE 4: CONFIG CAMÉRA ===== -->
+            <section class="tile-panel" id="tile-config-cam">
+                <h2 class="tile-title">Configuration Caméra &amp; Vidéo</h2>
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h3>Caméra principale</h3>
+                        <label>Périphérique <select id="cfg-camera-device"><option value="/dev/video0">/dev/video0</option></select></label>
+                        <button class="btn btn-secondary btn-sm" id="btn-refresh-cameras">🔄 Rafraîchir</button>
+                                                <button class="btn btn-accent btn-sm" id="btn-detect-cameras">🔍 Détecter</button>
+                        <label>Largeur <select id="cfg-width"><option value="640">640</option><option value="1280" selected>1280</option><option value="1920">1920</option></select></label>
+                        <label>Hauteur <select id="cfg-height"><option value="480">480</option><option value="720" selected>720</option><option value="1080">1080</option></select></label>
+                        <label>FPS <select id="cfg-fps"><option value="15">15</option><option value="30" selected>30</option><option value="60">60</option></select></label>
+                        <label>Format <select id="cfg-format"><option value="MJPEG" selected>MJPEG</option><option value="YUYV">YUYV</option></select></label>
+                    </div>
+                    <div class="config-card">
+                        <h3>OSD sur vidéo</h3>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-osd-enabled" checked> Activer l'OSD backend</label>
+                    </div>
+                    <div class="config-card">
+                        <h3>Picture-in-Picture (PiP)</h3>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-pip-enabled"> Activer PiP</label>
+                        <label>Caméra secondaire <select id="cfg-pip-device"><option value="/dev/video2">/dev/video2</option></select></label>
+                        <label>Position <select id="cfg-pip-position"><option value="top-right" selected>Haut droite</option><option value="top-left">Haut gauche</option><option value="bottom-right">Bas droite</option><option value="bottom-left">Bas gauche</option></select></label>
+                        <label>Taille <select id="cfg-pip-size"><option value="small" selected>Petit</option><option value="medium">Moyen</option><option value="large">Grand</option></select></label>
+                        <button class="btn btn-secondary btn-sm" id="btn-swap-cameras">🔄 Échanger caméras</button>
+                    </div>
+                    <div class="config-card">
+                        <h3>📸 Enregistrement</h3>
+                        <label>Résolution vidéo
+                            <select id="cfg-video-resolution">
+                                <option value="640x480">640×480</option>
+                                <option value="1280x720" selected>1280×720 (HD)</option>
+                                <option value="1920x1080">1920×1080 (Full HD)</option>
+                            </select>
+                        </label>
+                        <label>Résolution photo
+                            <select id="cfg-photo-resolution">
+                                <option value="1280x720">1280×720 (HD)</option>
+                                <option value="1920x1080" selected>1920×1080 (Full HD)</option>
+                                <option value="2592x1944">2592×1944 (5MP)</option>
+                            </select>
+                        </label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-video-osd" checked> Inclure l'OSD dans les vidéos</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-photo-osd" checked> Inclure l'OSD dans les photos</label>
+                    </div>
+                </div>
+
+                <!-- Réglages V4L2 par caméra -->
+                <div class="camera-tabs">
+                    <button class="cam-tab active" data-cam="1">📷 CAMÉRA 1</button>
+                    <button class="cam-tab" data-cam="2">📷 CAMÉRA 2 (PiP)</button>
+                </div>
+                <div class="cam-controls-panel" id="cam-controls-panel">
+                    <div class="cam-controls-header">
+                        <span id="cam-device-label">/dev/video0</span>
+                        <button class="btn btn-secondary btn-sm" id="btn-cam-refresh-params">🔄 Lire paramètres</button>
+                    </div>
+                    <div class="cam-controls-grid" id="cam-controls-grid">
+                        <!-- Rempli dynamiquement par camera_config.js -->
+                    </div>
+                    <div class="config-actions">
+                        <button class="btn btn-primary" id="btn-cam-apply">📸 Appliquer à la caméra</button>
+                        <button class="btn btn-secondary" id="btn-cam-reset">↺ Réinitialiser</button>
+                        <button class="btn btn-accent btn-sm" id="btn-fps-priority" title="Désactive l'auto-exposition pour stabiliser le FPS">⚡ Priorité FPS</button>
+                    </div>
+                </div>
+
+                <div class="config-actions" style="margin-top:12px;">
+                    <button class="btn btn-primary" id="btn-save-cam-config">💾 Sauvegarder config</button>
+                    <button class="btn btn-secondary" id="btn-reload-cam-config">↺ Recharger</button>
+                </div>
+            </section>
+
+            <!-- ===== TUILE: CONFIG MANETTE ===== -->
+            <section class="tile-panel" id="tile-config-manette">
+                <h2 class="tile-title">🎮 Configuration Manette</h2>
+
+                <div class="gamepad-config-container">
+                    <!-- Section Profils -->
+                    <div class="config-card">
+                        <h3>📋 Profils</h3>
+                        <div class="profile-selector">
+                            <select id="gp-profile-select"></select>
+                            <button class="btn-accent" id="gp-profile-apply">Appliquer</button>
+                        </div>
+                        <div class="profile-actions">
+                            <button class="btn-sm" id="gp-profile-save">💾 Sauvegarder</button>
+                            <button class="btn-sm" id="gp-profile-new">➕ Nouveau</button>
+                            <button class="btn-sm btn-danger" id="gp-profile-delete">🗑️ Supprimer</button>
+                            <button class="btn-sm" id="gp-profile-export">📤 Exporter</button>
+                            <button class="btn-sm" id="gp-profile-import">📥 Importer</button>
+                            <input type="file" id="gp-import-file" accept=".json" style="display:none">
+                        </div>
+
+                        <!-- Modal création de profil -->
+                        <div id="gp-new-profile-modal" class="gp-modal-overlay hidden">
+                            <div class="gp-modal">
+                                <h3>➕ Nouveau profil</h3>
+                                <div class="gp-modal-body">
+                                    <div class="control-group">
+                                        <label>Nom du profil</label>
+                                        <input type="text" id="gp-new-name" placeholder="Mon profil" maxlength="30">
+                                    </div>
+                                    <div class="control-group">
+                                        <label>Description (optionnel)</label>
+                                        <input type="text" id="gp-new-desc" placeholder="Description courte" maxlength="80">
+                                    </div>
+                                    <div class="control-group">
+                                        <label>Basé sur</label>
+                                        <select id="gp-new-base">
+                                            <option value="">Profil vide</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="gp-modal-actions">
+                                    <button class="btn-sm" id="gp-new-cancel">Annuler</button>
+                                    <button class="btn-accent" id="gp-new-confirm">Créer</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section Visualisation SVG -->
+                    <div class="config-card gamepad-visual-card">
+                        <h3>🎮 Visualisation</h3>
+                        <div id="gamepad-svg-container" class="gamepad-svg-container"></div>
+                        <div class="gp-connection-status">
+                            <span id="gp-connection-badge" class="gp-disconnected">⚪ Déconnectée</span>
+                            <span id="gp-gamepad-name"></span>
+                        </div>
+                    </div>
+
+                    <!-- Section Mapping — tableau unique trié par thèmes -->
+                    <div class="config-card gamepad-mapping-card">
+                        <!-- En-tête unique : titre + UNE SEULE barre d'actions -->
+                        <div class="gp-map-header">
+                            <h3>🗺️ Mapping de la manette</h3>
+                            <div class="gp-map-actions">
+                                <button class="btn-accent gp-map-save">💾 Sauvegarder le profil</button>
+                                <button class="btn-sm gp-map-reset">↺ Réinitialiser aux valeurs par défaut</button>
+                                <button class="btn-sm gp-map-export">📤 Exporter JSON</button>
+                                <button class="btn-sm gp-map-import">📥 Importer JSON</button>
+                            </div>
+                        </div>
+                        <input type="file" id="gp-map-import-file" accept=".json" style="display:none">
+
+                        <!-- Bannière d'écoute (assignation) -->
+                        <div id="gp-learn-banner" class="gp-learn-banner hidden">
+                            <span class="gp-learn-pulse"></span>
+                            <span id="gp-learn-msg">Appuyez sur un ou plusieurs boutons (combo) ou bougez un axe...</span>
+                            <button id="gp-learn-cancel" class="btn-sm gp-learn-cancel-btn">✕ Annuler</button>
+                        </div>
+
+                        <!-- Tableau unique : catégorie / fonction / entrée / réglages / actions -->
+                        <div class="gp-map-table-wrapper">
+                            <table class="mapping-table">
+                                <thead>
+                                    <tr>
+                                        <th>Catégorie / Thème</th>
+                                        <th>Fonction / Action</th>
+                                        <th>Bouton / Axe attribué</th>
+                                        <th>Sensibilité / Inversion</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="gp-map-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Section Paramètres globaux -->
+                    <div class="config-card">
+                        <h3>⚙️ Paramètres globaux</h3>
+                        <div class="gamepad-settings">
+                            <div class="control-group">
+                                <label>Sensibilité</label>
+                                <input type="range" id="gp-sensitivity" min="10" max="100" value="100">
+                                <span id="gp-sensitivity-val">100%</span>
+                            </div>
+                            <div class="control-group">
+                                <label>Zone morte (deadzone)</label>
+                                <input type="range" id="gp-deadzone" min="0" max="30" value="12">
+                                <span id="gp-deadzone-val">12%</span>
+                            </div>
+                            <div class="control-group">
+                                <label>Courbe de réponse</label>
+                                <select id="gp-response-curve">
+                                    <option value="linear">Linéaire</option>
+                                    <option value="exponential">Exponentielle</option>
+                                    <option value="logarithmic">Logarithmique</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="gp-invert-x"> Inverser axe X
+                                </label>
+                            </div>
+                            <div class="control-group">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="gp-invert-y"> Inverser axe Y
+                                </label>
+                            </div>
+                            <div class="control-group">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="gp-vibration" checked> Vibration
+                                </label>
+                            </div>
+                            <div class="control-group">
+                                <label>Intensité vibration</label>
+                                <input type="range" id="gp-vibration-intensity" min="0" max="100" value="80">
+                                <span id="gp-vibration-intensity-val">80%</span>
+                            </div>
+                            <div class="control-group">
+                                <label>Délai de répétition (ms)</label>
+                                <input type="number" id="gp-repeat-delay" min="50" max="1000" value="200" step="50">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section Test en direct -->
+                    <div class="config-card gamepad-test-card">
+                        <h3>🧪 Test en direct</h3>
+                        <div class="gamepad-test-controls">
+                            <button class="btn-accent" id="gp-test-start">▶️ Démarrer le test</button>
+                            <button class="btn-sm" id="gp-test-stop" disabled>⏹️ Arrêter</button>
+                        </div>
+                        <div id="gamepad-test-panel" class="gamepad-test-panel">
+                            <div class="test-section">
+                                <h4>Boutons</h4>
+                                <div id="gp-test-buttons" class="test-buttons-grid"></div>
+                            </div>
+                            <div class="test-section">
+                                <h4>Axes</h4>
+                                <div id="gp-test-axes" class="test-axes-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== TUILE 5: SIMULATION ===== -->
+            <section class="tile-panel" id="tile-simulation">
+                <h2 class="tile-title">Simulation ROV / Scénarios</h2>
+
+                <!-- Barre d'actions -->
+                <div class="sim-toolbar">
+                    <button class="btn btn-secondary btn-sm" id="btn-sim-refresh-list">🔄 Rafraîchir</button>
+                    <select id="sim-scenario-select" class="sim-select"></select>
+                    <button class="btn btn-secondary btn-sm" id="btn-sim-load">📂 Charger</button>
+                    <div class="sim-spacer"></div>
+                    <button class="btn btn-success" id="btn-sim-start">▶ Exécuter</button>
+                    <button class="btn btn-secondary" id="btn-sim-pause">⏸ Pause</button>
+                    <button class="btn btn-danger" id="btn-sim-stop">⏹ Arrêter</button>
+                    <button class="btn btn-secondary" id="btn-sim-reset">↺ Reset</button>
+                </div>
+
+                <!-- Barre de progression -->
+                <div class="sim-progress-section">
+                    <div class="sim-progress-info">
+                        <span>État: <strong id="sim-state">Arrêté</strong></span>
+                        <span>Instruction: <strong id="sim-current-instr">—</strong></span>
+                        <span>Temps: <strong id="sim-elapsed">0.0s</strong> / <strong id="sim-duration">--</strong></span>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill" id="sim-progress-bar" style="width:0%"></div></div>
+                </div>
+
+                <!-- Éditeur de scénario en liste -->
+                <div class="sim-editor">
+                    <div class="sim-editor-header">
+                        <h3>📝 Constructeur de scénario</h3>
+                        <div class="sim-editor-meta">
+                            <input type="text" id="sim-scenario-name" placeholder="Nom du scénario" value="Mission">
+                            <label class="toggle-label"><input type="checkbox" id="sim-scenario-loop"> 🔄 Boucle</label>
+                        </div>
+                    </div>
+                    <div class="sim-instructions" id="sim-instructions-list">
+                        <!-- Instructions ajoutées dynamiquement -->
+                    </div>
+                    <button class="btn btn-secondary btn-sm sim-add-line" id="btn-sim-add-line">+ Ajouter une ligne</button>
+
+                    <div class="sim-editor-actions">
+                        <button class="btn btn-primary" id="btn-sim-save">💾 Sauvegarder</button>
+                        <input type="text" id="sim-save-filename" placeholder="mon_scenario.json" class="sim-filename-input">
+                    </div>
+                </div>
+
+                <!-- Paramètres temps réel -->
+                <div class="config-card" style="margin-top:12px;">
+                    <h3>Paramètres temps réel (override)</h3>
+                    <label>Cap (heading) <input type="range" id="sim-rt-heading" min="0" max="360" value="0"><span id="sim-heading-val">0°</span></label>
+                    <label>Profondeur (m) <input type="range" id="sim-rt-depth" min="0" max="100" value="0"><span id="sim-depth-val">0m</span></label>
+                    <label>Roulis (°) <input type="range" id="sim-rt-roll" min="-45" max="45" value="0"><span id="sim-roll-val">0°</span></label>
+                    <label>Tangage (°) <input type="range" id="sim-rt-pitch" min="-45" max="45" value="0"><span id="sim-pitch-val">0°</span></label>
+                    <label>Température (°C) <input type="range" id="sim-rt-temp" min="0" max="40" value="20"><span id="sim-temp-val">20°C</span></label>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- ========== CRÉDITS ========== -->
+        <footer class="app-footer">
+            <span>© 2026 Didier Dero — Cockpit-Lite ROV v1.0</span>
+        </footer>
+    </div>
+
+    <!-- ========== MODAL POPUP LECTURE ========== -->
+    <div class="modal-overlay" id="media-modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-title" id="modal-title">Lecture</span>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- ========== MODALE WI-FI ========== -->
+    <div class="modal-overlay" id="wifi-modal" style="display:none;">
+        <div class="modal-content wifi-modal-content">
+            <div class="modal-header">
+                <span class="modal-title">📶 Réseaux Wi-Fi disponibles</span>
+                <button class="modal-close" id="wifi-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="wifi-toolbar">
+                    <button class="btn btn-secondary btn-sm" id="btn-wifi-refresh">🔄 Rafraîchir</button>
+                    <span class="wifi-scan-status" id="wifi-scan-status"></span>
+                </div>
+                <div class="wifi-network-list" id="wifi-network-list">
+                    <div class="wifi-empty">Cliquez sur « Rafraîchir » pour scanner les réseaux</div>
+                </div>
+                <div class="wifi-connect-panel" id="wifi-connect-panel" style="display:none;">
+                    <h4 id="wifi-connect-ssid">Connexion à…</h4>
+                    <div class="wifi-password-row">
+                        <input type="password" id="wifi-password" placeholder="Mot de passe Wi-Fi" autocomplete="off">
+                        <button class="btn btn-sm" id="wifi-toggle-pw" title="Afficher/masquer">👁</button>
+                    </div>
+                    <div class="wifi-connect-actions">
+                        <button class="btn btn-primary btn-sm" id="btn-wifi-connect">Se connecter</button>
+                        <button class="btn btn-secondary btn-sm" id="btn-wifi-cancel">Annuler</button>
+                    </div>
+                    <div class="wifi-connect-log" id="wifi-connect-log"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== NAVIGATION MANETTE ========== -->
+    <div id="gamepad-nav-bar" class="gamepad-nav-bar">
+        <span class="nav-hint"><span class="nav-key">D-Pad</span> Naviguer</span>
+        <span class="nav-hint"><span class="nav-key">✕</span> Sélectionner</span>
+        <span class="nav-hint"><span class="nav-key">●</span> Retour</span>
+        <span class="nav-hint"><span class="nav-key">△</span> Menu</span>
+    </div>
+
+    <!-- Menu contextuel manette -->
+    <div id="gamepad-context-menu" class="gamepad-context-menu"></div>
+
+    <!-- ========== OVERLAY MODE LUNETTE ========== -->
+    <div id="goggle-overlay" class="goggle-overlay">
+        <!-- Flux vidéo plein écran -->
+        <img class="goggle-video" alt="Flux ROV">
+
+        <!-- Crosshair central -->
+        <div class="goggle-crosshair">
+            <svg viewBox="0 0 60 60" fill="none" stroke="#00ff88" stroke-width="1.5" opacity="0.7">
+                <circle cx="30" cy="30" r="20"/>
+                <line x1="30" y1="5" x2="30" y2="15"/>
+                <line x1="30" y1="45" x2="30" y2="55"/>
+                <line x1="5" y1="30" x2="15" y2="30"/>
+                <line x1="45" y1="30" x2="55" y2="30"/>
+                <circle cx="30" cy="30" r="3"/>
+            </svg>
+        </div>
+
+        <!-- Barre d'outils en haut -->
+        <div class="goggle-toolbar">
+            <div class="toolbar-left">
+                <button class="goggle-btn" onclick="Goggle.deactivate()">← Retour</button>
+                <button class="goggle-btn" onclick="Goggle.toggleNight()" id="goggle-btn-night">🌙 Nuit</button>
+                <button class="goggle-btn" onclick="Goggle.toggleFullscreen()">⛶ Plein écran</button>
+                <button class="goggle-btn" onclick="Goggle.toggleCrosshair()">⊕ Grille</button>
+            </div>
+            <div class="toolbar-right">
+                <span class="goggle-timer" id="goggle-timer">00:00</span>
+            </div>
+        </div>
+
+        <!-- Commandes rapides en bas -->
+        <div class="goggle-controls">
+            <button class="goggle-btn" onclick="Goggle.quickAction('photo')">📷 Photo</button>
+            <button class="goggle-btn" onclick="Goggle.quickAction('video_toggle')">🎬 Vidéo</button>
+            <button class="goggle-btn" onclick="Goggle.quickAction('light_toggle')">💡 LED</button>
+            <button class="goggle-btn" onclick="Goggle.quickAction('autolevel_toggle')">⚖️ Assiette</button>
+            <button class="goggle-btn goggle-btn-danger" onclick="Goggle.quickAction('emergency_stop')">🚨 Urgence</button>
+        </div>
+
+        <!-- Infos en bas -->
+        <div class="goggle-info-left">
+            <span class="goggle-gamepad-status" id="goggle-gp-status">🎮 --</span>
+        </div>
+        <div class="goggle-info-right">
+            <span>🥽 Lunette | G:Basculer F:Plein écran N:Nuit Esc:Quitter</span>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/app.js"></script>
+    <script src="js/telemetry.js"></script>
+    <script src="js/gamepad.js"></script>
+    <script src="js/gamepad_nav.js"></script>
+    <script src="js/simulation.js"></script>
+    <script src="js/camera_config.js"></script>
+    <script src="js/osd_config.js"></script>
+    <script src="js/gamepad_config.js"></script>
+    <script src="js/gamepad_visual.js"></script>
+    <script src="js/gamepad_test.js"></script>
+    <script src="js/action_status.js"></script>
+    <script src="js/goggle.js"></script>
+    <script src="js/wifi.js"></script>
+</body>
+</html>

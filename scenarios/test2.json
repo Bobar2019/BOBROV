@@ -1,0 +1,64 @@
+{
+    "name": "Direct",
+    "description": "",
+    "loop": false,
+    "steps": [
+        {
+            "time": 0.0,
+            "action": "depth",
+            "value": -120
+        },
+        {
+            "time": 10.0,
+            "action": "depth",
+            "value": -120
+        },
+        {
+            "time": 10.0,
+            "action": "heading",
+            "value": -15.1
+        },
+        {
+            "time": 12.0,
+            "action": "heading",
+            "value": -15.1
+        },
+        {
+            "time": 12.0,
+            "action": "depth",
+            "value": -10
+        },
+        {
+            "time": 27.0,
+            "action": "depth",
+            "value": -10
+        }
+    ],
+    "instructions": [
+        {
+            "action": "depth",
+            "valeur": -120,
+            "duree": 10
+        },
+        {
+            "action": "heading",
+            "valeur": -15.1,
+            "duree": 2
+        },
+        {
+            "action": "depth",
+            "valeur": -10,
+            "duree": 15
+        },
+        {
+            "action": "wait",
+            "valeur": -10,
+            "duree": 6
+        },
+        {
+            "action": "loop",
+            "valeur": -10,
+            "duree": 30
+        }
+    ]
+}

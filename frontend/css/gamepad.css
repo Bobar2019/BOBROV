@@ -1,0 +1,611 @@
+/* ==========================================================
+   BOB-ROV — Styles Config Manette (Gamepad)
+   ========================================================== */
+
+/* === CONTENEUR PRINCIPAL === */
+.gamepad-config-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+}
+
+/* === CARTE DE CONFIGURATION (surcharge locale) === */
+.gamepad-config-container .config-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 16px;
+    transition: background var(--transition), border-color var(--transition);
+}
+
+.gamepad-config-container .config-card:hover {
+    border-color: var(--accent);
+}
+
+.gamepad-config-container .config-card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.gamepad-config-container .config-card h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 10px 0 6px;
+}
+
+/* === SÉLECTEUR DE PROFIL === */
+.profile-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.profile-selector select {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.profile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* === BOUTONS === */
+.btn-accent {
+    padding: 6px 14px;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: #000;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.btn-accent:hover {
+    opacity: 0.85;
+    transform: translateY(-1px);
+}
+
+.btn-accent:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.btn-sm:hover {
+    background: var(--bg-card);
+    border-color: var(--accent);
+}
+
+.btn-sm.btn-danger {
+    border-color: var(--accent-red);
+    color: var(--accent-red);
+}
+
+.btn-sm.btn-danger:hover {
+    background: var(--accent-red);
+    color: #fff;
+}
+
+/* === SVG CONTAINER === */
+.gamepad-svg-container {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: var(--bg-input);
+    border-radius: var(--radius);
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.gamepad-svg-container svg {
+    width: 90%;
+    height: auto;
+    max-height: 90%;
+}
+
+/* === SVG BOUTONS === */
+.gp-btn {
+    fill: #555;
+    stroke: #777;
+    stroke-width: 1;
+    transition: fill 0.15s ease, stroke 0.15s ease;
+    cursor: pointer;
+}
+
+.gp-btn:hover {
+    fill: #777;
+}
+
+.gp-btn.pressed {
+    fill: #00ff88;
+    stroke: #00ff88;
+    animation: gp-pulse 0.6s ease infinite;
+}
+
+.gp-btn.highlight {
+    fill: var(--accent-blue);
+    stroke: var(--accent-blue);
+}
+
+@keyframes gp-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* === INDICATEUR AXIAL (STICKS) === */
+.gp-axis-container {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    background: var(--bg-input);
+}
+
+.gp-axis-indicator {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: transform 0.05s linear;
+}
+
+/* === BARRE D'AXE LINÉAIRE (L2/R2) === */
+.gp-axis-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-input);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    margin: 4px 0;
+}
+
+.gp-axis-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.05s linear;
+    width: 0%;
+}
+
+/* === TABLEAU UNIQUE DE MAPPING (trié par thèmes) === */
+/* En-tête unique : titre + une seule barre d'actions */
+.gp-map-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.gp-map-header h3 {
+    margin-bottom: 0 !important;
+}
+
+.gp-map-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* Conteneur : pleine largeur + défilement vertical si la liste est longue */
+.gp-map-table-wrapper {
+    width: 100%;
+    max-height: 70vh;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-input);
+}
+
+.mapping-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.mapping-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 2px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.mapping-table th:last-child {
+    border-right: none;
+}
+
+.mapping-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    vertical-align: middle;
+    background: var(--bg-card);
+}
+
+.mapping-table td:last-child {
+    border-right: none;
+}
+
+.mapping-table tbody tr:hover td:not(.gp-cat-cell) {
+    background: var(--bg-secondary);
+}
+
+.mapping-table tbody tr.highlight td {
+    background: rgba(0, 255, 136, 0.15);
+    transition: background 0.3s ease;
+}
+
+/* Cellule catégorie fusionnée (rowspan) */
+.mapping-table .gp-cat-cell {
+    background: var(--bg-input);
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--accent);
+    vertical-align: top;
+    padding-top: 12px;
+    white-space: nowrap;
+    min-width: 130px;
+}
+
+.mapping-table .gp-fn-cell {
+    min-width: 190px;
+}
+
+.gp-fn-label {
+    color: var(--text-primary);
+}
+
+.gp-fn-status {
+    font-size: 10px;
+    opacity: 0.8;
+    cursor: help;
+}
+
+/* Badges bouton / combo / axe attribués */
+.gp-key-cell {
+    min-width: 130px;
+}
+
+.gp-key-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    margin: 1px 4px 1px 0;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.gp-key-badge.gp-key-combo {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.gp-key-badge.gp-key-axis {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+
+.gp-key-none {
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 10px;
+}
+
+/* Réglages par axe : inversion + deadzone + sensibilité */
+.gp-axis-adjust {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.gp-adj-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.gp-adj-item input[type="number"] {
+    width: 44px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 10px;
+}
+
+.gp-adj-item input[type="checkbox"] {
+    accent-color: var(--accent);
+}
+
+/* Boutons d'action par ligne */
+.gp-act-cell {
+    white-space: nowrap;
+}
+
+.gp-assign-btn {
+    margin-right: 4px;
+}
+
+.gp-assign-btn.listening {
+    border-color: var(--accent);
+    color: var(--accent);
+    animation: gp-pulse 0.8s ease infinite;
+}
+
+.gp-clear-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/* === CARTE VISUELLE === */
+.gamepad-visual-card {
+    grid-column: span 1;
+}
+
+.gp-connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 11px;
+}
+
+.gp-connected {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.gp-disconnected {
+    color: var(--text-secondary);
+}
+
+#gp-gamepad-name {
+    color: var(--text-secondary);
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
+/* === CARTE MAPPING (tableau pleine largeur) === */
+.gamepad-mapping-card {
+    grid-column: 1 / -1;
+}
+
+/* === PANNEAU TEST EN DIRECT === */
+.gamepad-test-card {
+    grid-column: 1 / -1;
+}
+
+.gamepad-test-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.gamepad-test-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.test-section h4 {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.test-buttons-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    gap: 6px;
+}
+
+.test-btn-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 4px;
+    border-radius: 4px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    font-size: 10px;
+    color: var(--text-secondary);
+    transition: all 0.1s ease;
+}
+
+.test-btn-indicator .btn-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #555;
+    margin-bottom: 3px;
+    transition: background 0.1s ease;
+}
+
+.test-btn-indicator.active .btn-dot {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+}
+
+.test-axes-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.test-axis-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+}
+
+.test-axis-row label {
+    flex: 0 0 60px;
+    color: var(--text-secondary);
+}
+
+.test-axis-row .axis-bar-wrapper {
+    flex: 1;
+    height: 10px;
+    background: var(--bg-input);
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.test-axis-row .axis-bar-center {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--border-color);
+}
+
+.test-axis-row .axis-bar-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--accent);
+    border-radius: 5px;
+    transition: left 0.05s linear, width 0.05s linear;
+}
+
+.test-axis-row .axis-value {
+    flex: 0 0 45px;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-primary);
+}
+
+/* === PARAMÈTRES AVANCÉS === */
+.gamepad-settings .control-group {
+    margin-bottom: 10px;
+}
+
+.gamepad-settings .control-group label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.gamepad-settings .control-group input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+}
+
+.gamepad-settings .control-group select,
+.gamepad-settings .control-group input[type="number"] {
+    width: 100%;
+    padding: 5px 8px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.gamepad-settings .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.gamepad-settings .control-group span {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    margin-left: 6px;
+}
+
+/* === CONFIG ACTIONS === */
+.gamepad-config-container .config-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+    .gamepad-config-container {
+        grid-template-columns: 1fr;
+    }
+    .gamepad-mapping-card {
+        grid-column: span 1;
+    }
+    .gamepad-test-panel {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1023px) {
+    .gamepad-config-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

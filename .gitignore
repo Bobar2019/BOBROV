@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environnement virtuel
+venv/
+.env
+
+# Logs
+logs/
+
+# Enregistrements vidéo/photo
+recordings/
+
+# Configuration locale (contient mots de passe / chemins locaux)
+config.txt
+
+# Profils manette (trop volumineux / spécifique machine)
+# profiles/
+
+# IDE / éditeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
