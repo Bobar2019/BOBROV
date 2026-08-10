@@ -398,6 +398,11 @@
             <!-- ===== TUILE 3: CONFIG OSD ===== -->
             <section class="tile-panel" id="tile-config-osd">
                 <h2 class="tile-title">Configuration OSD / Affichage tête haute</h2>
+                <!-- Aperçu en direct : vidéo + OSD canvas vectoriel -->
+                <div class="video-container osd-preview-container">
+                    <img id="osd-preview-video" src="/video_feed" alt="Aperçu vidéo">
+                    <canvas id="osd-preview-canvas"></canvas>
+                </div>
                 <div class="config-grid">
                     <div class="config-card">
                         <h3>Éléments visibles</h3>
@@ -422,6 +427,7 @@
                     <div class="config-card">
                         <h3>Apparence</h3>
                         <label>Transparence OSD (globale) <input type="range" id="cfg-opacity" min="0" max="100" value="100"><span id="opacity-val">100%</span></label>
+                        <label>Transparence Horizon <input type="range" id="cfg-horizon-opacity" min="10" max="100" value="100"><span id="horizon-opacity-val">100%</span></label>
                         <label>Transparence Profondeur <input type="range" id="cfg-depth-opacity" min="10" max="100" value="100"><span id="depth-opacity-val">100%</span></label>
                         <label>Transparence Température <input type="range" id="cfg-temperature-opacity" min="10" max="100" value="100"><span id="temperature-opacity-val">100%</span></label>
                         <label>Transparence Cap <input type="range" id="cfg-compass-opacity" min="10" max="100" value="100"><span id="compass-opacity-val">100%</span></label>
@@ -478,7 +484,7 @@
                     </div>
                     <div class="config-card">
                         <h3>OSD sur vidéo</h3>
-                        <label class="toggle-label"><input type="checkbox" id="cfg-osd-enabled" checked> Activer l'OSD backend</label>
+                        <label class="toggle-label"><input type="checkbox" id="cfg-osd-enabled" checked> OSD sur enregistrements et photos</label>
                     </div>
                     <div class="config-card">
                         <h3>Picture-in-Picture (PiP)</h3>

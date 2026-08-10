@@ -255,7 +255,9 @@ html, body { height: 100%; font-family: var(--font-sans); font-size: 14px; color
 }
 .video-container { position: relative; background: #000; border-radius: var(--radius); overflow: hidden; min-height: 250px; transition: all 0.35s ease; contain: layout paint; }
 .video-container img { width: 100%; height: 100%; object-fit: contain; display: block; position: relative; z-index: 1; }
-#osd-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; /* OSD canvas désactivé — OSD backend utilisé */ z-index: 2; }
+#osd-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+#osd-preview-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+.osd-preview-container { max-height: 400px; margin-bottom: 16px; aspect-ratio: 16/9; min-height: 200px; }
 .control-panel { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overflow-x: hidden; transition: opacity 0.3s ease, width 0.35s ease; opacity: 1; min-width: 0; padding-right: 2px; }
 
 /* === ACCORDÉON VERTICAL (panneau latéral Cockpit) === */

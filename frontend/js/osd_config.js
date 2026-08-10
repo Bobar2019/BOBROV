@@ -26,6 +26,7 @@ const OSDConfig = (() => {
         primary_color: '#00FF00', font_scale: 0.8, opacity: 100,
         depth_opacity: 100, temperature_opacity: 100,
         compass_opacity: 100, battery_opacity: 100, motors_opacity: 100,
+        horizon_opacity: 100,
         horizon_x: 50, horizon_y: 50, depth_x: 3, depth_y: 15,
         temperature_x: 88, temperature_y: 5, compass_x: 50, compass_y: 92,
         battery_x: 88, battery_y: 12, fps_x: 2, fps_y: 96,
@@ -56,6 +57,7 @@ const OSDConfig = (() => {
 
         // Sliders opacité par élément
         const elemOpacitySliders = [
+            { id: 'cfg-horizon-opacity',     valId: 'horizon-opacity-val',     key: 'horizon_opacity' },
             { id: 'cfg-depth-opacity',       valId: 'depth-opacity-val',       key: 'depth_opacity' },
             { id: 'cfg-temperature-opacity', valId: 'temperature-opacity-val', key: 'temperature_opacity' },
             { id: 'cfg-compass-opacity',     valId: 'compass-opacity-val',     key: 'compass_opacity' },
@@ -219,6 +221,7 @@ const OSDConfig = (() => {
                 if (opacity) { opacity.value = osd.opacity || 100; document.getElementById('opacity-val').textContent = `${opacity.value}%`; }
 
                 // Sliders opacité par élément
+                _setSlider('cfg-horizon-opacity',     osd.horizon_opacity || 100,     'horizon-opacity-val',     '%');
                 _setSlider('cfg-depth-opacity',       osd.depth_opacity || 100,       'depth-opacity-val',       '%');
                 _setSlider('cfg-temperature-opacity', osd.temperature_opacity || 100, 'temperature-opacity-val', '%');
                 _setSlider('cfg-compass-opacity',     osd.compass_opacity || 100,     'compass-opacity-val',     '%');
@@ -279,6 +282,7 @@ const OSDConfig = (() => {
             fps_color: getColor('cfg-fps-color'),
             primary_color: getColor('cfg-primary-color'),
             opacity: parseInt(document.getElementById('cfg-opacity')?.value || '100'),
+            horizon_opacity: parseInt(document.getElementById('cfg-horizon-opacity')?.value || '100'),
             depth_opacity: parseInt(document.getElementById('cfg-depth-opacity')?.value || '100'),
             temperature_opacity: parseInt(document.getElementById('cfg-temperature-opacity')?.value || '100'),
             compass_opacity: parseInt(document.getElementById('cfg-compass-opacity')?.value || '100'),
@@ -344,6 +348,7 @@ const OSDConfig = (() => {
         const opacity = document.getElementById('cfg-opacity');
         if (opacity) { opacity.value = 100; document.getElementById('opacity-val').textContent = '100%'; }
 
+        _setSlider('cfg-horizon-opacity', 100, 'horizon-opacity-val', '%');
         _setSlider('cfg-depth-opacity', 100, 'depth-opacity-val', '%');
         _setSlider('cfg-temperature-opacity', 100, 'temperature-opacity-val', '%');
         _setSlider('cfg-compass-opacity', 100, 'compass-opacity-val', '%');

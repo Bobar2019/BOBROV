@@ -53,6 +53,12 @@ const App = (() => {
             // (corrige le cas où gamepadconnected n'est pas déclenché par le navigateur)
             if (typeof Gamepad !== 'undefined') Gamepad.onCockpitActivate();
         }
+        // Démarrer l'OSD canvas vectoriel pour cockpit ET config OSD (aperçu en direct)
+        if (tileId === 'cockpit' || tileId === 'config-osd') {
+            if (typeof Telemetry !== 'undefined') Telemetry.startOSD();
+        } else {
+            if (typeof Telemetry !== 'undefined') Telemetry.stopOSD();
+        }
         if (tileId === 'dashboard' && typeof ActionStatus !== 'undefined') {
             ActionStatus.renderStatusPanel('action-status-panel');
         }
@@ -72,6 +78,8 @@ const App = (() => {
         if (btnBack) btnBack.style.display = 'none';
         // Réinitialiser la tuile active
         document.querySelectorAll('.nav-tile').forEach(t => t.classList.remove('active'));
+        // Arrêter l'OSD canvas (économie CPU hors cockpit)
+        if (typeof Telemetry !== 'undefined') Telemetry.stopOSD();
         activeTile = null;
 
         // Informer le module de navigation manette

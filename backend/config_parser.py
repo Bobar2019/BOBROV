@@ -80,6 +80,7 @@ class ConfigParser:
                 "fps_color": "#FFFFFF",
                 "font_scale": 0.8,
                 "opacity": 100,
+                "horizon_opacity": 100,
                 "depth_opacity": 100,
                 "temperature_opacity": 100,
                 "compass_opacity": 100,

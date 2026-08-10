@@ -875,9 +875,13 @@ class VideoStreamer:
 
     def _osd_display_loop(self):
         """
-        Thread dédié au rendu OSD + PiP + encodage JPEG pour l'affichage.
+        Thread dédié au rendu PiP + encodage JPEG pour l'affichage.
         Découplé de la capture pour ne pas ralentir le flux vidéo.
-        Fonctionne à son propre rythme (~7-10fps selon charge OSD).
+        Fonctionne à son propre rythme (~7-10fps selon charge).
+
+        L'OSD affichage est désormais rendu côté frontend (canvas vectoriel
+        haute résolution) — le backend n'applique l'OSD OpenCV QUE pour les
+        enregistrements vidéo et les captures photo qui le demandent.
         """
         logger.debug("Thread OSD démarré")
         while not self._osd_stop_event.is_set():
@@ -892,34 +896,33 @@ class VideoStreamer:
                 time.sleep(0.02)  # Pas de frame disponible, attendre brièvement
                 continue
 
-            # Appliquer l'OSD si activé
-            if self.config.get('osd_enabled', True):
-                try:
-                    frame = self._apply_osd(frame)
-                except Exception as osd_err:
-                    logger.warning(f"Erreur OSD (thread): {osd_err}")
-
-            # Cacher le frame OSD pour usage éventuel
+            # Cacher la frame brute pour usage éventuel
             self._last_osd_frame = frame
 
-            # Appliquer le Picture-in-Picture
+            # Appliquer le Picture-in-Picture (commun affichage + enregistrement)
             try:
                 frame = self._apply_pip(frame)
             except Exception as pip_err:
                 logger.warning(f"Erreur PiP (thread OSD): {pip_err}")
 
-            # === RECORDING avec OSD : envoyer la frame traitée vers le thread d'écriture ===
+            # === RECORDING avec OSD : appliquer l'OSD sur une copie dédiée ===
             if self._recording and self._recording_with_osd:
                 try:
-                    self._recording_queue.put_nowait(frame.copy())
+                    rec_frame = self._apply_osd(frame.copy()) if self.config.get('osd_enabled', True) else frame.copy()
+                    self._recording_queue.put_nowait(rec_frame)
                 except Exception:
-                    pass  # Queue pleine — skip cette frame
+                    pass  # Queue pleine ou erreur OSD — skip cette frame
 
             # Photo avec OSD (gérée dans le thread OSD)
             if self._photo_requested and self._photo_with_osd:
-                self._take_photo(frame)
+                try:
+                    photo_frame = self._apply_osd(frame.copy()) if self.config.get('osd_enabled', True) else frame
+                    self._take_photo(photo_frame)
+                except Exception as osd_err:
+                    logger.warning(f"Erreur OSD photo (thread): {osd_err}")
+                    self._take_photo(frame)
 
-            # Encoder en JPEG et stocker pour le streaming MJPEG
+            # Encoder en JPEG SANS OSD (l'OSD affichage est rendu par le canvas frontend)
             try:
                 _, buffer = cv2.imencode(
                     '.jpg', frame,

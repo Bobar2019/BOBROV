@@ -14,6 +14,14 @@ const Telemetry = (() => {
     let osdAnimFrame = null;
     let osdRunning = false;
     let osdDpr = 1;   // devicePixelRatio appliqué au buffer du canvas OSD (netteté HD)
+    let osdResizeObserver = null;  // ResizeObserver attaché au conteneur du canvas OSD
+    let osdLastBufferW = 0;        // Dernières dimensions du buffer cockpit
+    let osdLastBufferH = 0;
+    let osdPreviewLastW = 0;       // Dernières dimensions du buffer aperçu config
+    let osdPreviewLastH = 0;
+
+    // Liste des canvas OSD actifs (cockpit + aperçu config OSD)
+    const OSD_CANVAS_IDS = ['osd-canvas', 'osd-preview-canvas'];
 
     // Données temps réel
     let data = {
@@ -29,10 +37,13 @@ const Telemetry = (() => {
     // Config OSD (chargée depuis le serveur)
     let osdConfig = {
         show_horizon: true, show_depth: true, show_temperature: true,
-        show_battery: true, show_compass: true, show_fps: true,
+        show_battery: true, show_compass: true, show_fps: true, show_motors: true,
         horizon_color: '#00FF88', depth_color: '#00AAFF', temperature_color: '#FFAA00',
         compass_color: '#FFFFFF', battery_color: '#00CC44', fps_color: '#FFFFFF',
         primary_color: '#00FF00', font_scale: 0.8, opacity: 100,
+        depth_opacity: 100, temperature_opacity: 100,
+        compass_opacity: 100, battery_opacity: 100, motors_opacity: 100,
+        horizon_opacity: 100,
         horizon_x: 50, horizon_y: 50, depth_x: 3, depth_y: 15,
         temperature_x: 88, temperature_y: 5, compass_x: 50, compass_y: 92,
         battery_x: 88, battery_y: 12, fps_x: 2, fps_y: 96,
@@ -158,7 +169,8 @@ const Telemetry = (() => {
             const osd = config.OSD_DISPLAY || {};
             // Champs booléens à convertir strictement
             const boolKeys = ['show_horizon', 'show_depth', 'show_temperature', 'show_battery',
-                              'show_compass', 'show_fps', 'horizon_show_text', 'horizon_clip'];
+                              'show_compass', 'show_fps', 'show_motors',
+                              'horizon_show_text', 'horizon_clip'];
             Object.keys(osdConfig).forEach(key => {
                 if (osd[key] !== undefined) {
                     if (boolKeys.includes(key)) {
@@ -174,7 +186,8 @@ const Telemetry = (() => {
     function updateOSDConfig(newConfig) {
         // Conversion booléenne robuste pour les champs concernés
         const boolKeys = ['show_horizon', 'show_depth', 'show_temperature', 'show_battery',
-                          'show_compass', 'show_fps', 'horizon_show_text', 'horizon_clip'];
+                          'show_compass', 'show_fps', 'show_motors',
+                          'horizon_show_text', 'horizon_clip'];
         for (const key of boolKeys) {
             if (newConfig[key] !== undefined) {
                 newConfig[key] = _toBool(newConfig[key]);
@@ -288,6 +301,7 @@ const Telemetry = (() => {
         if (osdRunning) return;
         osdRunning = true;
         resizeCanvas();
+        _attachResizeObserver();
         window.addEventListener('resize', resizeCanvas);
         renderOSD();
     }
@@ -295,6 +309,7 @@ const Telemetry = (() => {
     function stopOSD() {
         osdRunning = false;
         if (osdAnimFrame) { cancelAnimationFrame(osdAnimFrame); osdAnimFrame = null; }
+        _detachResizeObserver();
         window.removeEventListener('resize', resizeCanvas);
         const canvas = document.getElementById('osd-canvas');
         if (canvas) { const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); }
@@ -303,23 +318,73 @@ const Telemetry = (() => {
     // Redimensionne le buffer INTERNE du canvas en haute résolution (× ratio de
     // pixels de l'écran) tout en conservant sa taille CSS : sans cela le canvas
     // 1× est étiré par le navigateur sur écran HD/Retina → télémétrie floue.
-    // Le contexte est normalisé via ctx.scale(dpr) : tout le code de dessin
-    // continue de travailler en coordonnées CSS, inchangé.
+    // Le contexte est normalisé via ctx.setTransform(dpr,0,0,dpr,0,0) : tout le
+    // code de dessin continue de travailler en coordonnées CSS, inchangé.
+    //
+    // Optimisations ajoutées :
+    //   - getBoundingClientRect() pour la taille CSS réelle (sub-pixel aware),
+    //     plus fiable que clientWidth/clientHeight sur conteneurs flex/grid.
+    //   - Le buffer n'est réalloué (canvas.width = …) QUE si ses dimensions
+    //     physiques ont effectivement changé → évite de réinitialiser le contexte
+    //     et de créer un GC storm à chaque frame.
+    //   - setTransform et imageSmoothingEnabled réappliqués à chaque appel,
+    //     garantissant que l'état du contexte reste cohérent même après clearRect
+    //     ou opérations asynchrones.
+    // Redimensionne le buffer INTERNE d'un canvas OSD en haute résolution.
+    // Gère à la fois le canvas cockpit et l'aperçu config OSD.
     function resizeCanvas() {
-        const canvas = document.getElementById('osd-canvas');
-        const container = canvas?.parentElement;
-        if (!canvas || !container) return;
         const dpr = window.devicePixelRatio || 1;
-        const displayWidth = container.clientWidth;
-        const displayHeight = container.clientHeight;
-        canvas.width = Math.round(displayWidth * dpr);
-        canvas.height = Math.round(displayHeight * dpr);
-        canvas.style.width = `${displayWidth}px`;
-        canvas.style.height = `${displayHeight}px`;
-        const ctx = canvas.getContext('2d');
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // normalise les coordonnées 2D
-        ctx.imageSmoothingEnabled = true;         // AA propre des arcs/diagonales
+        OSD_CANVAS_IDS.forEach(id => {
+            const canvas = document.getElementById(id);
+            const container = canvas?.parentElement;
+            if (!canvas || !container) return;
+
+            const rect = container.getBoundingClientRect();
+            const displayWidth  = Math.max(1, Math.floor(rect.width));
+            const displayHeight = Math.max(1, Math.floor(rect.height));
+            const bufferW = Math.round(displayWidth  * dpr);
+            const bufferH = Math.round(displayHeight * dpr);
+
+            // Réallocation uniquement si dimensions physiques changent
+            if (bufferW !== canvas._lastBufW || bufferH !== canvas._lastBufH || dpr !== osdDpr) {
+                canvas.width  = bufferW;
+                canvas.height = bufferH;
+                canvas._lastBufW = bufferW;
+                canvas._lastBufH = bufferH;
+            }
+
+            if (canvas.style.width  !== `${displayWidth}px`)  canvas.style.width  = `${displayWidth}px`;
+            if (canvas.style.height !== `${displayHeight}px`) canvas.style.height = `${displayHeight}px`;
+
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.imageSmoothingEnabled = true;
+        });
         osdDpr = dpr;
+    }
+
+    // Attache un ResizeObserver au conteneur du canvas OSD pour déclencher
+    // resizeCanvas() automatiquement dès que le conteneur change de taille
+    // (fin de rendu CSS initial, transitions de layout, bascule panneau, etc.)
+    function _attachResizeObserver() {
+        _detachResizeObserver();
+        if (typeof ResizeObserver === 'undefined') return;
+
+        osdResizeObserver = new ResizeObserver(() => {
+            resizeCanvas();
+        });
+        OSD_CANVAS_IDS.forEach(id => {
+            const canvas = document.getElementById(id);
+            const container = canvas?.parentElement;
+            if (container) osdResizeObserver.observe(container);
+        });
+    }
+
+    function _detachResizeObserver() {
+        if (osdResizeObserver) {
+            try { osdResizeObserver.disconnect(); } catch (e) { /* ignore */ }
+            osdResizeObserver = null;
+        }
     }
 
     function hexToRgba(hex, alpha) {
@@ -331,77 +396,99 @@ const Telemetry = (() => {
 
     function renderOSD() {
         if (!osdRunning) return;
-        const canvas = document.getElementById('osd-canvas');
-        if (!canvas) { osdAnimFrame = requestAnimationFrame(renderOSD); return; }
 
-        const ctx = canvas.getContext('2d');
-        // Si le ratio de pixels a changé (zoom navigateur, déplacement vers un
-        // autre écran), ré-échantillonner le buffer AVANT de mesurer/dessiner.
+        // Si le ratio de pixels a changé, ré-échantillonner tous les buffers
         if ((window.devicePixelRatio || 1) !== osdDpr) resizeCanvas();
-        // Dimensions LOGIQUES (CSS) : le buffer physique vaut × osdDpr, mais le
-        // contexte est déjà normalisé par setTransform — on dessine en px CSS.
-        const w = canvas.width / osdDpr, h = canvas.height / osdDpr;
-        ctx.clearRect(0, 0, w, h);
-        if (w < 100 || h < 100) { osdAnimFrame = requestAnimationFrame(renderOSD); return; }
 
-        const opacity = osdConfig.opacity / 100;
-        ctx.globalAlpha = opacity;
-        const scale = Math.min(w / 1280, h / 720);
-        const fontSize = Math.max(11, Math.round(14 * scale * (osdConfig.font_scale || 0.8)));
-
-        // Helper position (% -> pixels)
-        const px = (pctX) => Math.round(w * pctX / 100);
-        const py = (pctY) => Math.round(h * pctY / 100);
-
-        // 1. Horizon (filtre "bain d'huile" 2ème ordre)
+        // Pré-calcul du filtre "bain d'huile" (une seule fois, indépendant du canvas)
+        let fRoll = 0, fPitch = 0;
         if (osdConfig.show_horizon) {
-            // damping 1-10 → alpha 0.50 (vif) à 0.05 (très fluide)
             const damping = osdConfig.horizon_damping != null ? osdConfig.horizon_damping : 5;
             const alpha = 1.0 / (0.5 + damping * 0.45);
             const r = _applyOilBathFilter(data.roll,  _filter.roll1,  _filter.roll2,  alpha);
             _filter.roll1 = r.pass1; _filter.roll2 = r.pass2;
             const p = _applyOilBathFilter(data.pitch, _filter.pitch1, _filter.pitch2, alpha);
             _filter.pitch1 = p.pass1; _filter.pitch2 = p.pass2;
-            // Dead zone microscopique pour un horizon parfaitement stable au repos
-            const fRoll  = Math.abs(_filter.roll2)  < 0.1 ? 0 : _filter.roll2;
-            const fPitch = Math.abs(_filter.pitch2) < 0.1 ? 0 : _filter.pitch2;
-            drawHorizon(ctx, px(osdConfig.horizon_x), py(osdConfig.horizon_y), w, h, fRoll, fPitch, osdConfig.horizon_color, scale, fontSize, osdConfig);
+            fRoll  = Math.abs(_filter.roll2)  < 0.1 ? 0 : _filter.roll2;
+            fPitch = Math.abs(_filter.pitch2) < 0.1 ? 0 : _filter.pitch2;
         }
-        // 2. Profondeur
-        if (osdConfig.show_depth) {
-            drawGauge(ctx, px(osdConfig.depth_x), py(osdConfig.depth_y), h, data.depth, 100, 'm', 'PROF', osdConfig.depth_color, scale, fontSize);
-        }
-        // 3. Température
-        if (osdConfig.show_temperature) {
-            drawText(ctx, px(osdConfig.temperature_x), py(osdConfig.temperature_y), `TEMP: ${data.temperature.toFixed(1)}°C`, osdConfig.temperature_color, fontSize, 'right');
-        }
-        // 4. Boussole
-        if (osdConfig.show_compass) {
-            drawCompass(ctx, px(osdConfig.compass_x), py(osdConfig.compass_y), w, data.heading, osdConfig.compass_color, '#FFD700', scale, fontSize);
-        }
-        // 5. Batterie
-        if (osdConfig.show_battery) {
-            drawBattery(ctx, px(osdConfig.battery_x), py(osdConfig.battery_y), data.battery, osdConfig.battery_color, scale, fontSize);
-        }
-        // 6. FPS
-        if (osdConfig.show_fps) {
-            drawText(ctx, px(osdConfig.fps_x), py(osdConfig.fps_y), `FPS: ${data.fps}`, osdConfig.fps_color, Math.round(fontSize * 0.85), 'left');
-        }
-        // 6.1 Alerte faible lumière
-        if (data.fps > 0 && data.fps < 10) {
-            drawText(ctx, px(osdConfig.fps_x), py(osdConfig.fps_y) + fontSize, '⚠ Manque de lumière', '#FF4444', Math.round(fontSize * 0.75), 'left');
-        }
-        // 7. Timestamp
-        const now = new Date();
-        drawText(ctx, w - 10, h - 15, now.toTimeString().substring(0, 8), osdConfig.fps_color, Math.round(fontSize * 0.85), 'right');
 
-        // 8. Armé/Désarmé
-        ctx.textAlign = 'center';
-        ctx.font = `bold ${Math.round(fontSize * 1.1)}px 'Courier New', monospace`;
-        ctx.fillStyle = data.armed ? '#FF4444' : '#44FF44';
-        ctx.fillText(data.armed ? '● ARMÉ' : '○ DÉSARMÉ', w / 2, 25);
+        // Dessiner sur CHAQUE canvas OSD visible (cockpit + aperçu config)
+        OSD_CANVAS_IDS.forEach(id => {
+            const canvas = document.getElementById(id);
+            if (!canvas || canvas.width < 100 || canvas.height < 100) return;
+            // Ignorer les canvas dont le conteneur n'est pas visible
+            const container = canvas.parentElement;
+            if (container && container.offsetParent === null && !container.classList.contains('active')) return;
 
-        ctx.globalAlpha = 1;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width / osdDpr, h = canvas.height / osdDpr;
+            ctx.clearRect(0, 0, w, h);
+            if (w < 100 || h < 100) return;
+
+            const opacity = osdConfig.opacity / 100;
+            const scale = Math.min(w / 1280, h / 720);
+            const fontSize = Math.max(11, Math.round(14 * scale * (osdConfig.font_scale || 0.8)));
+            const elemAlpha = (elemOpacity) => opacity * ((elemOpacity != null ? elemOpacity : 100) / 100);
+            const px = (pctX) => Math.round(w * pctX / 100);
+            const py = (pctY) => Math.round(h * pctY / 100);
+
+            // 1. Horizon
+            if (osdConfig.show_horizon) {
+                ctx.globalAlpha = elemAlpha(osdConfig.horizon_opacity);
+                drawHorizon(ctx, px(osdConfig.horizon_x), py(osdConfig.horizon_y), w, h, fRoll, fPitch, osdConfig.horizon_color, scale, fontSize, osdConfig);
+            }
+            // 2. Profondeur
+            if (osdConfig.show_depth) {
+                ctx.globalAlpha = elemAlpha(osdConfig.depth_opacity);
+                drawGauge(ctx, px(osdConfig.depth_x), py(osdConfig.depth_y), h, data.depth, 100, 'm', 'PROF', osdConfig.depth_color, scale, fontSize);
+            }
+            // 3. Température
+            if (osdConfig.show_temperature) {
+                ctx.globalAlpha = elemAlpha(osdConfig.temperature_opacity);
+                drawText(ctx, px(osdConfig.temperature_x), py(osdConfig.temperature_y), `TEMP: ${data.temperature.toFixed(1)}°C`, osdConfig.temperature_color, fontSize, 'right');
+            }
+            // 4. Boussole
+            if (osdConfig.show_compass) {
+                ctx.globalAlpha = elemAlpha(osdConfig.compass_opacity);
+                drawCompass(ctx, px(osdConfig.compass_x), py(osdConfig.compass_y), w, data.heading, osdConfig.compass_color, '#FFD700', scale, fontSize);
+            }
+            // 5. Batterie
+            if (osdConfig.show_battery) {
+                ctx.globalAlpha = elemAlpha(osdConfig.battery_opacity);
+                drawBattery(ctx, px(osdConfig.battery_x), py(osdConfig.battery_y), data.battery, osdConfig.battery_color, scale, fontSize);
+            }
+            // 6. FPS
+            if (osdConfig.show_fps) {
+                ctx.globalAlpha = opacity;
+                drawText(ctx, px(osdConfig.fps_x), py(osdConfig.fps_y), `FPS: ${data.fps}`, osdConfig.fps_color, Math.round(fontSize * 0.85), 'left');
+            }
+            // 6.1 Alerte faible lumière
+            if (data.fps > 0 && data.fps < 10) {
+                ctx.globalAlpha = opacity;
+                drawText(ctx, px(osdConfig.fps_x), py(osdConfig.fps_y) + fontSize, '⚠ Manque de lumière', '#FF4444', Math.round(fontSize * 0.75), 'left');
+            }
+            // 7. Timestamp
+            ctx.globalAlpha = opacity;
+            const now = new Date();
+            drawText(ctx, w - 10, h - 15, now.toTimeString().substring(0, 8), osdConfig.fps_color, Math.round(fontSize * 0.85), 'right');
+
+            // 8. Armé/Désarmé
+            ctx.globalAlpha = opacity;
+            ctx.textAlign = 'center';
+            ctx.font = `bold ${Math.round(fontSize * 1.1)}px 'Courier New', monospace`;
+            ctx.fillStyle = data.armed ? '#FF4444' : '#44FF44';
+            ctx.fillText(data.armed ? '● ARMÉ' : '○ DÉSARMÉ', w / 2, 25);
+
+            // 9. Propulseurs
+            if (osdConfig.show_motors && Array.isArray(data.motors) && data.motors.length > 0) {
+                ctx.globalAlpha = elemAlpha(osdConfig.motors_opacity);
+                drawMotors(ctx, w, h, data.motors, scale, fontSize);
+            }
+
+            ctx.globalAlpha = 1;
+        });
+
         osdAnimFrame = requestAnimationFrame(renderOSD);
     }
 
@@ -673,6 +760,107 @@ const Telemetry = (() => {
         ctx.font = `bold ${Math.round(fontSize * 0.8)}px 'Courier New'`;
         ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
         ctx.fillText(`${Math.round(battery)}%`, x + barW + 5, y + barH / 2);
+    }
+
+    // ==========================================================
+    // PROPULSEURS (style cercles — vue du dessus en X)
+    // M1-M4 horizontaux (extérieur), M5-M8 verticaux (intérieur)
+    // Numérotation officielle : départ avant-droit, sens horaire.
+    // ==========================================================
+    function drawMotors(ctx, w, h, motors, scale, fontSize) {
+        const widgetW = Math.round(150 * scale);
+        const widgetH = Math.round(130 * scale);
+        const margin = 10;
+        const baseX = margin;                 // bottom-left par défaut
+        const baseY = h - widgetH - margin;
+
+        // Fond semi-transparent
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(baseX, baseY, widgetW, widgetH);
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(baseX + 0.5, baseY + 0.5, widgetW, widgetH);
+
+        // Titre
+        const titleSize = Math.max(9, Math.round(fontSize * 0.7));
+        ctx.font = `bold ${titleSize}px 'Courier New', monospace`;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('PROP', baseX + 5, baseY + 4);
+
+        // Centre du widget
+        const cx = baseX + widgetW / 2;
+        const cy = baseY + widgetH * 0.52;
+
+        // Espacements selon l'échelle
+        const spreadH = Math.round(48 * scale);  // horizontaux (extérieur)
+        const spreadV = Math.round(28 * scale);  // verticaux (intérieur)
+        const dyTop   = Math.round(-28 * scale);
+        const dyBot   = Math.round(28 * scale);
+
+        // Positions des 8 moteurs (vue du dessus, configuration X)
+        //   M4 ↖   ↗ M1        M8 ⭕   ⭕ M5   (avant)
+        //   M3 ↙   ↘ M2        M7 ⭕   ⭕ M6   (arrière)
+        const positions = {
+            1: { x: cx + spreadH, y: cy + dyTop },
+            2: { x: cx + spreadH, y: cy + dyBot },
+            3: { x: cx - spreadH, y: cy + dyBot },
+            4: { x: cx - spreadH, y: cy + dyTop },
+            5: { x: cx + spreadV, y: cy + dyTop },
+            6: { x: cx + spreadV, y: cy + dyBot },
+            7: { x: cx - spreadV, y: cy + dyBot },
+            8: { x: cx - spreadV, y: cy + dyTop }
+        };
+
+        const maxR = Math.max(4, Math.round(11 * scale));
+        const minR = Math.max(2, Math.round(4 * scale));
+        const labelSize = Math.max(8, Math.round(fontSize * 0.6));
+
+        for (const motor of motors) {
+            const pos = positions[motor.id];
+            if (!pos) continue;
+
+            const thrust = motor.thrust || 0;
+            const percent = motor.percent || 0;
+
+            // Couleur selon la direction
+            let color;
+            if (thrust > 0.01)      color = '#00FF88';  // vert (avant)
+            else if (thrust < -0.01) color = '#FF4444';  // rouge (arrière)
+            else                     color = '#555555';  // gris (stop)
+
+            // Rayon proportionnel à la puissance
+            const radius = minR + Math.round((maxR - minR) * (percent / 100));
+
+            // Cercle plein
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            // Contour max
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, maxR, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Label M1-M8
+            ctx.font = `bold ${labelSize}px 'Courier New', monospace`;
+            ctx.fillStyle = '#FFFFFF';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(`M${motor.id}`, pos.x, pos.y + maxR + 3);
+        }
+
+        // Pourcentage moyen en bas
+        const avgPct = motors.reduce((s, m) => s + (m.percent || 0), 0) / motors.length;
+        ctx.font = `bold ${labelSize}px 'Courier New', monospace`;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`Moy: ${avgPct.toFixed(0)}%`, baseX + 5, baseY + widgetH - 4);
     }
 
     // ==========================================================
