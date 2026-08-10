@@ -25,23 +25,15 @@
             "action": "press"
           },
           "CIRCLE": {
-            "function": "video_no_osd_toggle",
-            "action": "press"
-          },
-          "TRIANGLE": {
-            "function": "photo_cam1_osd",
+            "function": "panel_toggle",
             "action": "press"
           },
           "CROSS": {
             "function": "photo_cam1_no_osd",
             "action": "press"
           },
-          "SHARE": {
-            "function": "arm",
-            "action": "press"
-          },
           "OPTIONS": {
-            "function": "disarm",
+            "function": "photo",
             "action": "press"
           },
           "DPAD_RIGHT": {
@@ -59,6 +51,14 @@
           "DPAD_LEFT": {
             "function": "pitch_up",
             "action": "hold"
+          },
+          "TRIANGLE": {
+            "function": "arm_toggle",
+            "action": "press"
+          },
+          "SHARE": {
+            "function": "video_toggle",
+            "action": "press"
           }
         },
         "axes": {

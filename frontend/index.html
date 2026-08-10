@@ -216,97 +216,155 @@
 
             <!-- ===== TUILE 2: COCKPIT ===== -->
             <section class="tile-panel" id="tile-cockpit">
-                <div class="cockpit-layout">
+                <div class="cockpit-layout" id="cockpit-layout">
                     <div class="video-container">
                         <img id="video-stream" src="/video_feed" alt="Flux vidéo">
                         <canvas id="osd-canvas"></canvas>
+                        <button class="panel-toggle-btn" id="btn-toggle-panel" title="Masquer/Afficher le panneau (F)">◀</button>
                     </div>
-                    <div class="control-panel">
-                        <h3>Commandes</h3>
-                        <div class="control-group">
-                            <button class="btn btn-danger" id="btn-arm">🔓 ARMER</button>
-                            <button class="btn btn-success" id="btn-disarm">🔒 DÉSARMER</button>
-                        </div>
-                        <div class="control-group autopilot-group">
-                            <label>Auto-Pilote (ESP32)</label>
-                            <div class="autopilot-selector">
-                                <button class="btn-autopilot active" id="btn-ap-1" data-ap-mode="1" title="Pilotage manuel, stabilisation désactivée">🕹️ PASSIF</button>
-                                <button class="btn-autopilot" id="btn-ap-2" data-ap-mode="2" title="Stabilisation automatique du roulis">⚖️ AUTO-ROULIS</button>
-                                <button class="btn-autopilot" id="btn-ap-3" data-ap-mode="3" title="Stabilisation complète">🎯 AUTO-FULL</button>
+                    <div class="control-panel" id="control-panel">
+
+                        <!-- === Accordéon : Commandes === -->
+                        <div class="cockpit-section" data-section="commandes">
+                            <div class="section-header">
+                                <span class="section-title">🎮 Commandes</span>
+                                <span class="section-indicator">▾</span>
                             </div>
-                        </div>
-                        <div class="control-group">
-                            <label for="light-slider">Éclairage LED</label>
-                            <input type="range" id="light-slider" min="0" max="100" value="0">
-                            <span id="light-value">0%</span>
-                        </div>
-                        <div class="control-group record-group">
-                            <h4>📸 Enregistrement</h4>
-                            <div class="record-buttons">
-                                <button class="btn btn-record" id="btn-record-start" title="Démarrer l'enregistrement vidéo">🔴 REC</button>
-                                <button class="btn btn-record-stop" id="btn-record-stop" disabled title="Arrêter l'enregistrement">⏹ STOP</button>
-                                <button class="btn btn-photo" id="btn-photo" title="Prendre une photo">📷 PHOTO</button>
+                            <div class="section-body">
+                                <div class="control-group">
+                                    <button class="btn btn-danger" id="btn-arm">🔓 ARMER</button>
+                                    <button class="btn btn-success" id="btn-disarm">🔒 DÉSARMER</button>
+                                </div>
+                                <div class="control-group autopilot-group">
+                                    <label>Auto-Pilote (ESP32)</label>
+                                    <div class="autopilot-selector">
+                                        <button class="btn-autopilot active" id="btn-ap-1" data-ap-mode="1" title="Pilotage manuel, stabilisation désactivée">🕹️ PASSIF</button>
+                                        <button class="btn-autopilot" id="btn-ap-2" data-ap-mode="2" title="Stabilisation automatique du roulis">⚖️ AUTO-ROULIS</button>
+                                        <button class="btn-autopilot" id="btn-ap-3" data-ap-mode="3" title="Stabilisation complète">🎯 AUTO-FULL</button>
+                                    </div>
+                                </div>
+                                <div class="control-group">
+                                    <label for="light-slider">Éclairage LED</label>
+                                    <input type="range" id="light-slider" min="0" max="100" value="0">
+                                    <span id="light-value">0%</span>
+                                </div>
+                                <div class="control-group" style="margin-top:10px;">
+                                    <button class="btn-sm" id="btn-goggle" onclick="Goggle.activate()" title="Mode Lunette (G)">🥽 Mode Lunette</button>
+                                </div>
                             </div>
-                            <div class="record-osd-toggles">
-                                <label class="toggle-label toggle-sm"><input type="checkbox" id="cfg-record-video-osd" checked> OSD sur vidéo</label>
-                                <label class="toggle-label toggle-sm"><input type="checkbox" id="cfg-record-photo-osd" checked> OSD sur photo</label>
-                            </div>
-                            <div class="record-status" id="record-status">
-                                <span id="record-indicator" class="record-dot"></span>
-                                <span id="record-info">Prêt</span>
-                            </div>
-                        </div>
-                        <div class="telemetry-quick">
-                            <div class="tq-item"><span class="tq-label">Prof.</span><span class="tq-value" id="tq-depth">0.0m</span></div>
-                            <div class="tq-item"><span class="tq-label">Temp.</span><span class="tq-value" id="tq-temp">20.0°C</span></div>
-                            <div class="tq-item"><span class="tq-label">Cap</span><span class="tq-value" id="tq-heading">000°</span></div>
-                            <div class="tq-item"><span class="tq-label">Batt.</span><span class="tq-value" id="tq-battery">100%</span></div>
-                            <div class="tq-item"><span class="tq-label">Roulis</span><span class="tq-value" id="tq-roll">0.0°</span></div>
-                            <div class="tq-item"><span class="tq-label">Tangage</span><span class="tq-value" id="tq-pitch">0.0°</span></div>
-                            <div class="tq-item"><span class="tq-label">Press.</span><span class="tq-value" id="tq-pressure">1013 hPa</span></div>
-                        </div>
-                        <!-- Propulseurs M1..M8 (2 blocs, alimentés par la télémétrie WS) -->
-                        <div class="motors-panel">
-                            <div class="motors-group">
-                                <h4 class="motors-group-title">↔️ Propulsion Horizontale</h4>
-                                <div id="motors-horizontal" class="motors-bars"></div>
-                            </div>
-                            <div class="motors-group">
-                                <h4 class="motors-group-title">↕️ Propulsion Verticale</h4>
-                                <div id="motors-vertical" class="motors-bars"></div>
-                            </div>
-                        </div>
-                        <div class="gamepad-status"><span id="gp-status">🎮 Manette: non connectée</span></div>
-                        <div class="esp32-status"><span id="esp32-status" class="esp32-badge disconnected">🔌 ESP32: —</span></div>
-                        <div class="esp32-status"><span id="gy91-status" class="esp32-badge disconnected">🧭 IMU: —</span></div>
-                        <div class="control-group" style="margin-top:10px;">
-                            <button class="btn-sm" id="btn-goggle" onclick="Goggle.activate()" title="Mode Lunette (G)">🥽 Mode Lunette</button>
-                        </div>
-                        <div class="rov-status-indicator">
-                            <span id="rov-status-badge" class="status-badge" title="État des fonctions">Chargement...</span>
                         </div>
 
-                        <!-- Panneau réglages caméra rapides -->
-                        <div class="cockpit-cam-panel">
-                            <h4>📷 Réglages caméra rapides</h4>
-                            <div class="cockpit-cam-indicator">
-                                <span class="cam-dot active" id="cockpit-cam-dot"></span>
-                                <span id="cockpit-cam-device">/dev/video0</span>
+                        <!-- === Accordéon : Enregistrement === -->
+                        <div class="cockpit-section" data-section="enregistrement">
+                            <div class="section-header">
+                                <span class="section-title">📸 Enregistrement</span>
+                                <span class="section-indicator">▾</span>
                             </div>
-                            <div class="cam-quick-row">
-                                <label>Luminosité</label>
-                                <input type="range" id="cockpit-brightness" min="-10" max="10" value="0">
-                                <span id="cockpit-brightness-val">0</span>
-                            </div>
-                            <div class="cam-quick-row">
-                                <label>Contraste</label>
-                                <input type="range" id="cockpit-contrast" min="1" max="32" value="16">
-                                <span id="cockpit-contrast-val">16</span>
-                            </div>
-                            <div class="cam-quick-actions">
-                                <button class="btn btn-secondary btn-sm" id="btn-cockpit-swap" title="Inverser caméra principale et PiP">🔄 Inverser caméras</button>
+                            <div class="section-body">
+                                <div class="control-group record-group">
+                                    <div class="record-buttons">
+                                        <button class="btn btn-record" id="btn-record-start" title="Démarrer l'enregistrement vidéo">🔴 REC</button>
+                                        <button class="btn btn-record-stop" id="btn-record-stop" disabled title="Arrêter l'enregistrement">⏹ STOP</button>
+                                        <button class="btn btn-photo" id="btn-photo" title="Prendre une photo">📷 PHOTO</button>
+                                    </div>
+                                    <div class="record-osd-toggles">
+                                        <label class="toggle-label toggle-sm"><input type="checkbox" id="cfg-record-video-osd" checked> OSD sur vidéo</label>
+                                        <label class="toggle-label toggle-sm"><input type="checkbox" id="cfg-record-photo-osd" checked> OSD sur photo</label>
+                                    </div>
+                                    <div class="record-status" id="record-status">
+                                        <span id="record-indicator" class="record-dot"></span>
+                                        <span id="record-info">Prêt</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+
+                        <!-- === Accordéon : Télémétrie === -->
+                        <div class="cockpit-section" data-section="telemetrie">
+                            <div class="section-header">
+                                <span class="section-title">📊 Télémétrie</span>
+                                <span class="section-indicator">▾</span>
+                            </div>
+                            <div class="section-body">
+                                <div class="telemetry-quick">
+                                    <div class="tq-item"><span class="tq-label">Prof.</span><span class="tq-value" id="tq-depth">0.0m</span></div>
+                                    <div class="tq-item"><span class="tq-label">Temp.</span><span class="tq-value" id="tq-temp">20.0°C</span></div>
+                                    <div class="tq-item"><span class="tq-label">Cap</span><span class="tq-value" id="tq-heading">000°</span></div>
+                                    <div class="tq-item"><span class="tq-label">Batt.</span><span class="tq-value" id="tq-battery">100%</span></div>
+                                    <div class="tq-item"><span class="tq-label">Roulis</span><span class="tq-value" id="tq-roll">0.0°</span></div>
+                                    <div class="tq-item"><span class="tq-label">Tangage</span><span class="tq-value" id="tq-pitch">0.0°</span></div>
+                                    <div class="tq-item"><span class="tq-label">Press.</span><span class="tq-value" id="tq-pressure">1013 hPa</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- === Accordéon : Propulsion === -->
+                        <div class="cockpit-section" data-section="propulsion">
+                            <div class="section-header">
+                                <span class="section-title">⚙️ Propulsion</span>
+                                <span class="section-indicator">▾</span>
+                            </div>
+                            <div class="section-body">
+                                <!-- Propulseurs M1..M8 (2 blocs, alimentés par la télémétrie WS) -->
+                                <div class="motors-panel">
+                                    <div class="motors-group">
+                                        <h4 class="motors-group-title">↔️ Propulsion Horizontale</h4>
+                                        <div id="motors-horizontal" class="motors-bars"></div>
+                                    </div>
+                                    <div class="motors-group">
+                                        <h4 class="motors-group-title">↕️ Propulsion Verticale</h4>
+                                        <div id="motors-vertical" class="motors-bars"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- === Accordéon : Périphériques === -->
+                        <div class="cockpit-section" data-section="peripheriques">
+                            <div class="section-header">
+                                <span class="section-title">🔌 Périphériques</span>
+                                <span class="section-indicator">▾</span>
+                            </div>
+                            <div class="section-body">
+                                <div class="gamepad-status"><span id="gp-status">🎮 Manette: non connectée</span></div>
+                                <div class="esp32-status"><span id="esp32-status" class="esp32-badge disconnected">🔌 ESP32: —</span></div>
+                                <div class="esp32-status"><span id="gy91-status" class="esp32-badge disconnected">🧭 IMU: —</span></div>
+                                <div class="rov-status-indicator">
+                                    <span id="rov-status-badge" class="status-badge" title="État des fonctions">Chargement...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- === Accordéon : Caméra === -->
+                        <div class="cockpit-section" data-section="camera">
+                            <div class="section-header">
+                                <span class="section-title">📷 Caméra</span>
+                                <span class="section-indicator">▾</span>
+                            </div>
+                            <div class="section-body">
+                                <!-- Panneau réglages caméra rapides -->
+                                <div class="cockpit-cam-panel">
+                                    <div class="cockpit-cam-indicator">
+                                        <span class="cam-dot active" id="cockpit-cam-dot"></span>
+                                        <span id="cockpit-cam-device">/dev/video0</span>
+                                    </div>
+                                    <div class="cam-quick-row">
+                                        <label>Luminosité</label>
+                                        <input type="range" id="cockpit-brightness" min="-10" max="10" value="0">
+                                        <span id="cockpit-brightness-val">0</span>
+                                    </div>
+                                    <div class="cam-quick-row">
+                                        <label>Contraste</label>
+                                        <input type="range" id="cockpit-contrast" min="1" max="32" value="16">
+                                        <span id="cockpit-contrast-val">16</span>
+                                    </div>
+                                    <div class="cam-quick-actions">
+                                        <button class="btn btn-secondary btn-sm" id="btn-cockpit-swap" title="Inverser caméra principale et PiP">🔄 Inverser caméras</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </section>

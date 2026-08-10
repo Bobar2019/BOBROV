@@ -233,11 +233,168 @@ html, body { height: 100%; font-family: var(--font-sans); font-size: 14px; color
 .progress-fill { height: 100%; background: var(--accent-blue); border-radius: 3px; transition: width 0.5s ease; }
 
 /* === COCKPIT === */
-.cockpit-layout { display: grid; grid-template-columns: 1fr 260px; gap: 12px; height: calc(100vh - 80px); }
-.video-container { position: relative; background: #000; border-radius: var(--radius); overflow: hidden; min-height: 250px; }
-.video-container img { width: 100%; height: 100%; object-fit: contain; display: block; }
-#osd-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; /* OSD canvas désactivé — OSD backend utilisé */ }
-.control-panel { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.cockpit-layout { display: grid; grid-template-columns: 1fr 260px; gap: 12px; height: calc(100vh - 80px); transition: grid-template-columns 0.35s ease; }
+.cockpit-layout.panel-collapsed { grid-template-columns: 1fr 0; gap: 0; }
+.cockpit-layout.panel-collapsed .control-panel { opacity: 0; pointer-events: none; overflow: hidden; padding-left: 0; padding-right: 0; border: none; }
+
+/* === CORRECTIONS COCKPIT ===
+   1) Marge supérieure du panneau latéral pour ne pas passer sous la status-bar-float
+      (position: fixed, top:15px, hauteur ~32px → zone à libérer ≈ 50px)
+   2) Le conteneur vidéo confine strictement l'OSD (overflow:hidden + isolation)
+   3) Titre/en-têtes du panneau latéral correctement dégagés du bord supérieur
+*/
+#tile-cockpit .cockpit-layout {
+    padding-top: 48px;
+    height: calc(100vh - 32px);
+}
+#tile-cockpit .control-panel {
+    padding-top: 0;
+}
+#tile-cockpit .cockpit-section:first-child .section-header {
+    margin-top: 0;
+}
+.video-container { position: relative; background: #000; border-radius: var(--radius); overflow: hidden; min-height: 250px; transition: all 0.35s ease; contain: layout paint; }
+.video-container img { width: 100%; height: 100%; object-fit: contain; display: block; position: relative; z-index: 1; }
+#osd-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; /* OSD canvas désactivé — OSD backend utilisé */ z-index: 2; }
+.control-panel { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overflow-x: hidden; transition: opacity 0.3s ease, width 0.35s ease; opacity: 1; min-width: 0; padding-right: 2px; }
+
+/* === ACCORDÉON VERTICAL (panneau latéral Cockpit) === */
+.cockpit-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.2s ease;
+}
+.cockpit-section:hover { border-color: rgba(88, 166, 255, 0.35); }
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    cursor: pointer;
+    user-select: none;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    transition: background 0.2s ease;
+}
+.section-header:hover {
+    background: rgba(0, 255, 136, 0.06);
+}
+.section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.section-indicator {
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: transform 0.3s ease;
+    display: inline-block;
+}
+.cockpit-section.collapsed .section-indicator {
+    transform: rotate(-90deg);
+}
+
+/* Animation de repli via grid-template-rows (méthode moderne, fiable pour contenu imbriqué) */
+.section-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.3s ease;
+}
+.section-body > * {
+    overflow: hidden;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* État replié : la section se réduit STRICTEMENT à son en-tête.
+   - Le corps disparaît totalement (display:none, pas de padding, pas de bordure)
+   - La carte (.cockpit-section) n'a aucune hauteur minimale résiduelle
+   - Aucune zone sombre vide ne subsiste sous le titre
+*/
+.cockpit-section.collapsed {
+    min-height: 0;
+    height: auto;
+    padding: 0;
+}
+.cockpit-section.collapsed .section-body {
+    display: none !important;
+    grid-template-rows: 0fr;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    height: 0;
+    overflow: hidden;
+}
+.cockpit-section.collapsed .section-body > * {
+    visibility: hidden;
+    display: none !important;
+}
+
+/* Corps de section : padding interne pour que les badges/indicateurs ne touchent pas les bords */
+.section-body {
+    padding: 8px 10px 10px 10px;
+}
+
+/* Espacement interne : les cartes à l'intérieur perdent leur bordure/fond (déjà portées par la section) */
+.section-body .control-group,
+.section-body .record-group,
+.section-body .motors-panel,
+.section-body .telemetry-quick,
+.section-body .gamepad-status,
+.section-body .esp32-status,
+.section-body .rov-status-indicator,
+.section-body .cockpit-cam-panel {
+    background: transparent;
+    border: none;
+    margin: 0;
+}
+.section-body > * + * {
+    margin-top: 8px;
+}
+.section-body .control-group {
+    padding: 8px 10px;
+}
+.section-body .record-group {
+    padding: 0;
+}
+
+/* Bouton bascule panneau latéral */
+.panel-toggle-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: rgba(28, 33, 40, 0.85);
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    transition: all 0.25s ease;
+    opacity: 0.85;
+}
+.panel-toggle-btn:hover {
+    opacity: 1;
+    border-color: var(--accent);
+    background: rgba(0, 255, 136, 0.15);
+    transform: scale(1.08);
+}
+.panel-toggle-btn.collapsed {
+    right: 10px;
+    background: rgba(28, 33, 40, 0.95);
+    opacity: 1;
+}
 .control-panel h3 { font-size: 13px; font-weight: 600; color: var(--accent); padding-bottom: 6px; border-bottom: 1px solid var(--border-color); }
 .control-group { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); }
 .control-group label { font-size: 12px; color: var(--text-secondary); }
@@ -274,11 +431,48 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14p
 .tq-item { display: flex; flex-direction: column; align-items: center; padding: 5px; }
 .tq-label { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; }
 .tq-value { font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--accent); }
-.gamepad-status { padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); font-size: 12px; color: var(--text-secondary); }
+.gamepad-status {
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--text-secondary);
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+.gamepad-status > span,
+.esp32-status > span,
+.rov-status-indicator > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+}
 
 /* === STATUT ESP32 (contrôleur I2C moteurs) === */
-.esp32-status { margin-top: 8px; }
-.esp32-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius); font-size: 12px; font-weight: 600; border: 1px solid var(--border-color); transition: background var(--transition), color var(--transition), border-color var(--transition); }
+.esp32-status { margin-top: 8px; min-width: 0; }
+.esp32-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border-color);
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
 .esp32-badge.connected { background: rgba(0, 204, 68, 0.15); color: var(--accent); border-color: var(--accent); }
 .esp32-badge.disconnected { background: rgba(233, 69, 96, 0.15); color: var(--accent-red); border-color: var(--accent-red); animation: esp32Pulse 1.6s ease-in-out infinite; }
 @keyframes esp32Pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
@@ -597,6 +791,8 @@ input[type="color"] { width: 44px; height: 26px; border: 1px solid var(--border-
     align-items: center;
     gap: 8px;
     margin-top: 8px;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .status-badge {
@@ -605,9 +801,15 @@ input[type="color"] { width: 44px; height: 26px; border: 1px solid var(--border-
     border-radius: 6px;
     padding: 4px 10px;
     font-size: 0.75rem;
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 4px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 .status-badge .sep {

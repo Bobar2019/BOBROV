@@ -292,6 +292,12 @@ class ActionDispatcher:
                 'category': 'interface',
                 'handler': None,
             },
+            'panel_toggle': {
+                'status': ActionStatus.PLANNED,
+                'description': 'Basculer (ouvrir/masquer) le panneau latéral du Cockpit (géré côté IHM)',
+                'category': 'interface',
+                'handler': None,
+            },
             'imu_tare': {
                 'status': ActionStatus.PLANNED,
                 'description': 'Recalibrage zéro IMU / Tare',
@@ -339,6 +345,12 @@ class ActionDispatcher:
                 'description': 'Désarmer le ROV',
                 'category': 'controle',
                 'handler': self._action_disarm,
+            },
+            'arm_toggle': {
+                'status': ActionStatus.IMPLEMENTED,
+                'description': 'Basculer Armer / Désarmer (toggle)',
+                'category': 'controle',
+                'handler': self._action_arm_toggle,
             },
             'emergency_stop': {
                 'status': ActionStatus.IMPLEMENTED,
@@ -558,6 +570,12 @@ class ActionDispatcher:
             self._dof_state[axis] = 0.0
         self._apply_dof_state()
         return {"status": "ok", "message": "🔴 ROV désarmé"}
+
+    def _action_arm_toggle(self, value):
+        """Bascule Armer / Désarmer (1er appui = arme, 2e = désarme)"""
+        if self.rov_state.get('armed', False):
+            return self._action_disarm(value)
+        return self._action_arm(value)
     
     def _action_emergency_stop(self, value):
         """Arrêt d'urgence — désarme et coupe tout"""

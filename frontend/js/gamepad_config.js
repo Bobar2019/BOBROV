@@ -48,6 +48,7 @@ const GamepadConfig = (() => {
         {
             theme: '🛡️ Armement & Sécurité',
             rows: [
+                { fn: 'arm_toggle',       label: 'Basculer Armer / Désarmer (toggle)',         inputs: 'button' },
                 { fn: 'arm',              label: 'Armer les moteurs',                       inputs: 'button' },
                 { fn: 'disarm',           label: 'Désarmer les moteurs',                    inputs: 'button' },
                 { fn: 'emergency_stop',   label: 'Arrêt d\'urgence (Emergency Stop)',       inputs: 'button' },
@@ -74,6 +75,7 @@ const GamepadConfig = (() => {
             theme: '🖥️ Interface & Navigation IHM',
             rows: [
                 { fn: 'fpv_toggle',       label: 'Switch Vue Externe / Vue FPV caméra',     inputs: 'button' },
+                { fn: 'panel_toggle',     label: 'Basculer panneau latéral Cockpit (F)',     inputs: 'button' },
                 { fn: 'reset_position',   label: 'Reset position / Vue 3D',                 inputs: 'button' },
                 { fn: 'imu_tare',         label: 'Recalibrage zéro IMU / Tare',             inputs: 'button' },
             ],

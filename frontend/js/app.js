@@ -1182,6 +1182,18 @@ const App = (() => {
             const msg = r.message || '';
             const status = r.status || 'error';
 
+            // === Action manette : toggle panneau latéral Cockpit ===
+            // Exécutée côté IHM (pas de handler backend). On ignore le message
+            // "Fonction planifiée" envoyé par le dispatcher pour les actions PLANNED.
+            if (r.function === 'panel_toggle') {
+                if (activeTile === 'cockpit') {
+                    togglePanel();
+                } else {
+                    showNotification('⚠ Panneau latéral : activez d\'abord le Cockpit');
+                }
+                return;
+            }
+
             // Notification visuelle
             if (msg) showNotification(msg);
 
@@ -1371,6 +1383,94 @@ const App = (() => {
     }
 
     // ==========================================================
+    // ACCORDÉON VERTICAL (panneau latéral Cockpit)
+    // ==========================================================
+    const PANEL_STATE_KEY = 'bobrov-cockpit-sections';
+
+    function initAccordion() {
+        const sections = document.querySelectorAll('#control-panel .cockpit-section');
+        if (!sections.length) return;
+
+        // Charger l'état sauvegardé (tableau d'IDs repliés)
+        let collapsedIds = [];
+        try {
+            const raw = localStorage.getItem(PANEL_STATE_KEY);
+            if (raw) collapsedIds = JSON.parse(raw) || [];
+        } catch (e) { collapsedIds = []; }
+
+        sections.forEach(sec => {
+            const id = sec.dataset.section;
+            const header = sec.querySelector('.section-header');
+            if (!header) return;
+
+            // Restaurer l'état replié si mémorisé
+            if (collapsedIds.includes(id)) {
+                sec.classList.add('collapsed');
+            }
+
+            // Handler clic sur en-tête
+            header.addEventListener('click', (e) => {
+                // Ne pas plier si l'utilisateur clique dans un champ du header (pas le cas ici)
+                sec.classList.toggle('collapsed');
+                _saveAccordionState();
+            });
+        });
+    }
+
+    function _saveAccordionState() {
+        const sections = document.querySelectorAll('#control-panel .cockpit-section');
+        const collapsed = [];
+        sections.forEach(sec => {
+            if (sec.classList.contains('collapsed') && sec.dataset.section) {
+                collapsed.push(sec.dataset.section);
+            }
+        });
+        try {
+            localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(collapsed));
+        } catch (e) { /* ignore quota */ }
+    }
+
+    // ==========================================================
+    // PANNEAU LATÉRAL ESCAMOTABLE (Cockpit)
+    // ==========================================================
+    let _panelCollapsed = false;
+
+    function initPanelToggle() {
+        const btn = document.getElementById('btn-toggle-panel');
+        if (btn) {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                togglePanel();
+            });
+        }
+        // Raccourci clavier : touche "F" (uniquement si Cockpit actif et hors input)
+        document.addEventListener('keydown', (e) => {
+            if (activeTile !== 'cockpit') return;
+            const tag = (e.target && e.target.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if (e.key === 'f' || e.key === 'F') {
+                e.preventDefault();
+                togglePanel();
+            }
+        });
+    }
+
+    function togglePanel() {
+        const layout = document.getElementById('cockpit-layout');
+        const btn = document.getElementById('btn-toggle-panel');
+        if (!layout) return;
+        _panelCollapsed = !_panelCollapsed;
+        layout.classList.toggle('panel-collapsed', _panelCollapsed);
+        if (btn) {
+            btn.textContent = _panelCollapsed ? '▶' : '◀';
+            btn.classList.toggle('collapsed', _panelCollapsed);
+            btn.title = _panelCollapsed ? 'Afficher le panneau (F)' : 'Masquer le panneau (F)';
+        }
+        // Forcer un redimensionnement de l'OSD backend après la transition
+        setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 360);
+    }
+
+    // ==========================================================
     // INITIALISATION
     // ==========================================================
     function init() {
@@ -1385,6 +1485,8 @@ const App = (() => {
         initRecording();
         initActionFeedback();
         initMediaModal();
+        initPanelToggle();
+        initAccordion();
         refreshSystemInfo();
         setInterval(refreshSystemInfo, 5000);
 
