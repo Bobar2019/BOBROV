@@ -14,7 +14,7 @@
 /* Indicateur de navigation en bas de l'écran */
 .gamepad-nav-bar {
     position: fixed;
-    bottom: 15px;
+    bottom: 38px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 1001;

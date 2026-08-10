@@ -96,7 +96,7 @@ class ConfigParser:
                 "battery_x": 88,
                 "battery_y": 12,
                 "fps_x": 2,
-                "fps_y": 96,
+                "fps_y": 82,
                 "horizon_line_thick": 2,
                 "horizon_circle_opacity": 15,
                 "horizon_radius_pct": 18,

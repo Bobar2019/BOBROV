@@ -191,8 +191,8 @@ html, body { height: 100%; font-family: var(--font-sans); font-size: 14px; color
 /* Status bar flottante */
 .status-bar-float {
     position: fixed;
-    top: 15px;
-    right: 15px;
+    top: 10px;
+    right: 10px;
     z-index: 1000;
     display: flex;
     align-items: center;

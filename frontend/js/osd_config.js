@@ -30,7 +30,7 @@ const OSDConfig = (() => {
         horizon_opacity: 100, rov3d_opacity: 100,
         horizon_x: 50, horizon_y: 50, depth_x: 3, depth_y: 15,
         temperature_x: 88, temperature_y: 5, compass_x: 50, compass_y: 92,
-        battery_x: 88, battery_y: 12, fps_x: 2, fps_y: 96,
+        battery_x: 88, battery_y: 12, fps_x: 2, fps_y: 82,
         horizon_line_thick: 2, horizon_circle_opacity: 15, horizon_border_opacity: 25,
         horizon_radius_pct: 18, horizon_pitch_scale: 2, horizon_wing_color: '#FFFF00',
         horizon_show_text: true, horizon_clip: false, horizon_damping: 5
