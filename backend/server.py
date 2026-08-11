@@ -1593,6 +1593,104 @@ class WebServer:
                 "path": str(dest_path)
             }
 
+        # ============================================================
+        # === SCENE 3D — Gestion des modèles et configuration =======
+        # ============================================================
+        SCENE3D_DIR = Path("static/models/scene")
+        SCENE3D_DIR.mkdir(parents=True, exist_ok=True)
+        SCENE3D_CONFIG = Path("scene_3d_config.json")
+
+        def _read_scene3d_config() -> dict:
+            """Lit scene_3d_config.json, retourne {objects:[]} si inexistant."""
+            if SCENE3D_CONFIG.exists():
+                try:
+                    return json.loads(SCENE3D_CONFIG.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    pass
+            return {"objects": []}
+
+        def _write_scene3d_config(data: dict):
+            """Écrit scene_3d_config.json avec flush explicite sur disque."""
+            with open(SCENE3D_CONFIG, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+
+        @self.app.post("/api/scene3d/upload")
+        async def upload_scene3d_model(file: UploadFile = File(...)):
+            """Téléverse un modèle .glb/.gltf pour la scène 3D Mapping."""
+            # Validation extension
+            if not file.filename or not file.filename.lower().endswith(('.glb', '.gltf')):
+                raise HTTPException(status_code=400, detail="Seuls les fichiers .glb ou .gltf sont acceptés")
+
+            # Validation taille (max 50 Mo)
+            MAX_SIZE = 50 * 1024 * 1024
+            content = await file.read()
+            if len(content) > MAX_SIZE:
+                raise HTTPException(status_code=413, detail="Fichier trop volumineux (max 50 Mo)")
+
+            # Sauvegarde dans static/models/scene/
+            dest_path = SCENE3D_DIR / file.filename
+            if dest_path.exists():
+                # Suffixe timestamp si le fichier existe déjà
+                stem = Path(file.filename).stem
+                ext = Path(file.filename).suffix
+                dest_path = SCENE3D_DIR / f"{stem}_{int(time.time())}{ext}"
+
+            with open(dest_path, "wb") as f:
+                f.write(content)
+
+            logger.info(f"Modèle Scene 3D téléversé: {dest_path.name} ({len(content)} octets)")
+            return {
+                "success": True,
+                "filename": dest_path.name,
+                "size": len(content)
+            }
+
+        @self.app.get("/api/scene3d/models")
+        async def list_scene3d_models():
+            """Liste les fichiers .glb/.gltf disponibles dans la scène 3D."""
+            models = []
+            for f in SCENE3D_DIR.iterdir():
+                if f.suffix.lower() in ('.glb', '.gltf'):
+                    models.append({
+                        "name": f.name,
+                        "size": f.stat().st_size,
+                        "url": f"/static/models/scene/{f.name}"
+                    })
+            return {"models": models}
+
+        @self.app.delete("/api/scene3d/models/{filename}")
+        async def delete_scene3d_model(filename: str):
+            """Supprime un modèle de la scène 3D."""
+            file_path = SCENE3D_DIR / filename
+            if not file_path.exists():
+                raise HTTPException(status_code=404, detail=f"Fichier '{filename}' introuvable")
+            file_path.unlink()
+            logger.info(f"Modèle Scene 3D supprimé: {filename}")
+            return {"success": True, "filename": filename}
+
+        @self.app.get("/api/scene3d/config")
+        async def get_scene3d_config():
+            """Retourne la configuration de la scène 3D."""
+            return _read_scene3d_config()
+
+        @self.app.post("/api/scene3d/config")
+        async def save_scene3d_config(request: Request):
+            """Enregistre la configuration de la scène 3D."""
+            data = await request.json()
+            _write_scene3d_config(data)
+            logger.info("Configuration Scene 3D sauvegardée")
+            return {"status": "ok"}
+
+        @self.app.post("/api/scene3d/config/reset")
+        async def reset_scene3d_config():
+            """Réinitialise la configuration de la scène 3D."""
+            empty_config = {"objects": []}
+            _write_scene3d_config(empty_config)
+            logger.info("Configuration Scene 3D réinitialisée")
+            return {"status": "ok", "objects": []}
+
     def _convert_instructions_to_steps(self, instructions: list) -> list:
         """
         Convertit le format 'liste d'instructions' (frontend) en format 'steps' (scenario_manager).

@@ -1,0 +1,555 @@
+/* ==========================================================
+   BOB-ROV — CONFIG SCÈNE 3D  ·  Cockpit Dark Theme
+   ========================================================== */
+
+/* === PANNEAU PRINCIPAL === */
+.s3d-panel {
+    padding: 28px 32px;
+    max-width: 1360px;
+    margin: 0 auto;
+    overflow-y: auto;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    color: #e0e6f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* === SECTIONS === */
+.s3d-section {
+    background: #10182a;
+    border: 1px solid #24304d;
+    border-radius: 10px;
+    padding: 24px 28px;
+}
+
+.s3d-section-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #8eaadc;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 18px 0;
+}
+
+.s3d-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.s3d-section-header .s3d-section-title {
+    margin: 0;
+}
+
+/* === ZONE DRAG & DROP === */
+.s3d-dropzone {
+    border: 2px dashed #2e4068;
+    border-radius: 10px;
+    padding: 32px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.25s ease, background 0.25s ease;
+    margin-bottom: 20px;
+    background: rgba(16, 24, 42, 0.5);
+}
+
+.s3d-dropzone:hover {
+    border-color: #3fb950;
+    background: rgba(63, 185, 80, 0.04);
+}
+
+.s3d-dropzone.dragover {
+    border-color: #3fb950;
+    background: rgba(63, 185, 80, 0.10);
+}
+
+.s3d-dropzone-icon {
+    display: block;
+    font-size: 2rem;
+    color: #4e6a9b;
+    margin-bottom: 8px;
+}
+
+.s3d-dropzone-text {
+    font-size: 0.85rem;
+    color: #7b8da8;
+    margin: 0 0 14px 0;
+}
+
+.s3d-dropzone-text strong {
+    color: #a3bfdb;
+}
+
+.s3d-dropzone input[type="file"] {
+    display: none;
+}
+
+/* === GRILLE BIBLIOTHÈQUE === */
+.s3d-library-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 12px;
+}
+
+/* Carte modèle dans la bibliothèque */
+.s3d-lib-card {
+    position: relative;
+    background: #161f33;
+    border: 1px solid #24304d;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.s3d-lib-card:hover {
+    border-color: #58a6ff;
+    transform: translateY(-2px);
+}
+
+.s3d-lib-thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    background: #0e1525;
+    color: #4e6a9b;
+    user-select: none;
+    overflow: hidden;
+}
+
+.s3d-lib-info {
+    width: 100%;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.s3d-lib-name {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #c9d4e3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.s3d-lib-size {
+    font-size: 0.65rem;
+    color: #5c7294;
+}
+
+.s3d-lib-actions {
+    display: flex;
+    gap: 4px;
+    padding: 4px 6px 6px;
+}
+
+.s3d-lib-btn {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #8eaadc;
+    font-size: 0.78rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.s3d-lib-btn:hover {
+    background: #58a6ff;
+    color: #000;
+}
+
+.s3d-lib-btn--danger:hover {
+    background: #f85149;
+    color: #fff;
+}
+
+/* === TABLEAU DES OBJETS === */
+.s3d-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #24304d;
+    border-radius: 8px;
+    background: #0e1525;
+}
+
+.s3d-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+}
+
+.s3d-table thead {
+    background: #161f33;
+}
+
+.s3d-table th {
+    padding: 11px 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #6d84a8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid #24304d;
+}
+
+.s3d-table td {
+    padding: 8px 10px;
+    vertical-align: middle;
+    border-bottom: 1px solid rgba(36, 48, 77, 0.5);
+    color: #d0d9e8;
+}
+
+.s3d-table tbody tr {
+    transition: background 0.15s ease;
+}
+
+.s3d-table tbody tr:hover {
+    background: rgba(88, 166, 255, 0.04);
+}
+
+.s3d-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Colonne miniature */
+.s3d-th-thumb {
+    width: 60px;
+}
+
+.s3d-thumb-cell {
+    width: 50px;
+    height: 50px;
+    border-radius: 6px;
+    background: #161f33;
+    border: 1px solid #24304d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    color: #4e6a9b;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+    user-select: none;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.s3d-thumb-cell:hover {
+    border-color: #58a6ff;
+    transform: scale(1.08);
+}
+
+/* Colonne action */
+.s3d-th-action {
+    width: 50px;
+    text-align: center;
+}
+
+.s3d-del-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(248, 81, 73, 0.10);
+    color: #f85149;
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease;
+    margin: 0 auto;
+}
+
+.s3d-del-btn:hover {
+    background: #f85149;
+    color: #fff;
+}
+
+/* Champs dans le tableau */
+.s3d-table input[type="text"],
+.s3d-table input[type="number"],
+.s3d-table select {
+    background: #161f33;
+    border: 1px solid #2e4068;
+    border-radius: 5px;
+    padding: 6px 8px;
+    color: #d0d9e8;
+    font-size: 0.82rem;
+    font-family: inherit;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.2s ease;
+}
+
+.s3d-table input:focus,
+.s3d-table select:focus {
+    border-color: #58a6ff;
+}
+
+.s3d-table input[type="number"] {
+    -moz-appearance: textfield;
+    width: 72px;
+}
+
+.s3d-table input[type="number"]::-webkit-inner-spin-button,
+.s3d-table input[type="number"]::-webkit-outer-spin-button {
+    opacity: 1;
+}
+
+.s3d-table select {
+    min-width: 110px;
+    cursor: pointer;
+}
+
+/* Message vide */
+.s3d-empty-msg {
+    text-align: center;
+    color: #5c7294;
+    font-size: 0.85rem;
+    padding: 28px 16px;
+    margin: 0;
+}
+
+/* === BOUTONS GÉNÉRIQUES === */
+.s3d-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: filter 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+    white-space: nowrap;
+}
+
+.s3d-btn:hover {
+    filter: brightness(1.15);
+}
+
+.s3d-btn:active {
+    filter: brightness(0.9);
+}
+
+/* Accent vert principal */
+.s3d-btn--accent {
+    background: #238636;
+    color: #fff;
+}
+
+/* Outline / fantôme */
+.s3d-btn--outline {
+    background: transparent;
+    color: #8eaadc;
+    border: 1px solid #2e4068;
+}
+
+.s3d-btn--outline:hover {
+    border-color: #58a6ff;
+    color: #c9d4e8;
+}
+
+/* Vert sauvegarde */
+.s3d-btn--green {
+    background: #238636;
+    color: #fff;
+}
+
+/* Rouge réinitialiser */
+.s3d-btn--red {
+    background: #b62324;
+    color: #fff;
+}
+
+/* === BARRE D'ACTIONS BAS === */
+.s3d-actions-bottom {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+/* === MODALE INSPECTEUR 3D === */
+.scene3d-inspector-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0, 0, 0, 0.88);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+
+.scene3d-inspector-modal.active {
+    display: flex;
+}
+
+.scene3d-inspector-container {
+    position: relative;
+    min-width: 420px;
+    min-height: 420px;
+    max-width: 90vw;
+    max-height: 90vh;
+    width: 70vw;
+    height: 70vh;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #10182a;
+    border: 1px solid #2e4068;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+.scene3d-inspector-container canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.scene3d-inspector-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 10;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+    backdrop-filter: blur(4px);
+}
+
+.scene3d-inspector-close:hover {
+    background: #f85149;
+    color: #fff;
+}
+
+/* === SCROLLBAR PERSONNALISÉE === */
+.s3d-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+.s3d-panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.s3d-panel::-webkit-scrollbar-thumb {
+    background: #2e4068;
+    border-radius: 3px;
+}
+
+.s3d-panel::-webkit-scrollbar-thumb:hover {
+    background: #4e6a9b;
+}
+
+.s3d-table-wrap::-webkit-scrollbar {
+    height: 5px;
+}
+
+.s3d-table-wrap::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.s3d-table-wrap::-webkit-scrollbar-thumb {
+    background: #2e4068;
+    border-radius: 3px;
+}
+
+/* === IMAGES MINIATURES (rendu 3D snapshot) === */
+.s3d-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: inherit;
+    display: block;
+}
+
+/* État chargement miniature (shimmer) */
+.s3d-thumb-loading {
+    background: linear-gradient(90deg, #161f33 25%, #1e2a45 50%, #161f33 75%);
+    background-size: 200% 100%;
+    animation: s3d-shimmer 1.5s ease infinite;
+}
+
+@keyframes s3d-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* === TOAST NOTIFICATIONS === */
+.s3d-toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.s3d-toast {
+    padding: 12px 22px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    transform: translateX(120%);
+    opacity: 0;
+    transition: transform 0.35s ease, opacity 0.35s ease;
+    pointer-events: auto;
+    max-width: 380px;
+    white-space: nowrap;
+}
+
+.s3d-toast--visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.s3d-toast--success {
+    background: #238636;
+    color: #fff;
+}
+
+.s3d-toast--error {
+    background: #da3633;
+    color: #fff;
+}
+
+.s3d-toast--info {
+    background: #1f6feb;
+    color: #fff;
+}

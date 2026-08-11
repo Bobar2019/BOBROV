@@ -1,0 +1,30 @@
+{
+  "objects": [
+    {
+      "name": "Guppy",
+      "type": "decor",
+      "model": "guppy.glb",
+      "real_size_m": 1,
+      "count": 1,
+      "scale_min": 0.8,
+      "scale_max": 1.2,
+      "kinematic": "fixe",
+      "zone": "surface",
+      "speed": 1,
+      "behavior": "nageant"
+    },
+    {
+      "name": "alien",
+      "type": "decor",
+      "model": "alien_fish_animated.glb",
+      "real_size_m": 1,
+      "count": 1,
+      "scale_min": 0.8,
+      "scale_max": 1.2,
+      "kinematic": "fixe",
+      "zone": "fond",
+      "speed": 1,
+      "behavior": "curieux"
+    }
+  ]
+}

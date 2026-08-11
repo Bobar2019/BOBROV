@@ -64,6 +64,7 @@ const App = (() => {
         if (tileId === 'dashboard' && typeof ActionStatus !== 'undefined') {
             ActionStatus.renderStatusPanel('action-status-panel');
         }
+        if (tileId === 'config-scene-3d' && typeof SceneConfig !== 'undefined') SceneConfig.init();
     }
 
     function goHome() {
