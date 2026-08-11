@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BOB-ROV · Sub-Simulator</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤿</text></svg>">
+    <link rel="stylesheet" href="css/simulator3d.css">
+    <!-- Three.js via importmap -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <!-- Conteneur Three.js plein écran -->
+    <div id="sim-container"></div>
+
+    <!-- Overlay chargement / erreur -->
+    <div id="sim-overlay">
+        <div class="spinner"></div>
+        <div class="msg" id="sim-overlay-msg">Chargement du Sub-Simulator…</div>
+        <div class="sub" id="sim-overlay-sub">bob_rov_3D.glb</div>
+    </div>
+
+    <!-- Barre supérieure -->
+    <div class="sim-topbar">
+        <a class="sim-btn-back" href="/">← Cockpit</a>
+        <h1>🤿 Sub-Simulator <small>· entraînement plongée</small></h1>
+        <span class="ws-dot" id="sim-ws-dot" title="WebSocket télémétrie"></span>
+        <span class="gp-badge" id="sim-gp-badge" title="État manette">🎮 —</span>
+        <span class="gp-badge" id="sim-follow-badge" title="Mode caméra extérieure" style="color:#35d0ba">🎯 Suivi ROV</span>
+        <span class="fps-badge" id="sim-fps">FPS: --</span>
+    </div>
+
+    <!-- Canvas OSD (horizon, télémétrie, propulseurs) superposé à la scène 3D -->
+    <canvas id="sim-osd-canvas"></canvas>
+
+    <!-- Panneau actions (armement, vues, lumière, reset) -->
+    <div class="panel" id="sim-actions-panel">
+        <h2>Actions</h2>
+        <div class="act-grid">
+            <button class="act-btn" id="sim-btn-arm" title="Armer / Désarmer">🔒 DÉSARMÉ</button>
+            <button class="act-btn half" id="sim-btn-light" title="Éclairage ON/OFF">💡 Lumière</button>
+            <button class="act-btn half" id="sim-btn-reset" title="Replacer le ROV au centre">🎯 Centrer</button>
+            <button class="act-btn" id="sim-btn-fpv" title="Basculer vue externe / FPV">📹 Vue FPV</button>
+            <button class="act-btn" id="sim-btn-recenter" title="Recentrer caméra sur le ROV (R)">🎯 Recentrer ROV</button>
+            <button class="act-btn third" id="sim-btn-view-34">¾</button>
+            <button class="act-btn third" id="sim-btn-view-top">Haut</button>
+            <button class="act-btn third" id="sim-btn-view-side">Côté</button>
+        </div>
+    </div>
+
+    <!-- Panneau physique (inertie, gain, sensibilité) -->
+    <div class="panel" id="sim-phys-panel">
+        <h2>Physique 6DOF</h2>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="sim-inertia">Inertie / Glissement eau</label>
+                <span class="phys-val" id="sim-inertia-val">0.90</span>
+            </div>
+            <input type="range" class="phys-slider" id="sim-inertia" min="0.01" max="0.99" step="0.01" value="0.90">
+            <div class="phys-sub">0.01 = arrêt net · 0.99 = long glissement</div>
+        </div>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="sim-gain">Amplitude déplacement</label>
+                <span class="phys-val" id="sim-gain-val">1.0×</span>
+            </div>
+            <input type="range" class="phys-slider" id="sim-gain" min="0.1" max="5" step="0.1" value="1">
+        </div>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="sim-sens">Sensibilité joysticks</label>
+                <span class="phys-val" id="sim-sens-val">45%</span>
+            </div>
+            <input type="range" class="phys-slider" id="sim-sens" min="0.1" max="1" step="0.05" value="0.45">
+        </div>
+    </div>
+
+    <!-- Panneau plongée (profondeur, turbidité, étendue) -->
+    <div class="panel" id="sim-dive-panel">
+        <h2>Environnement sous-marin</h2>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="sim-depth">Profondeur du fond</label>
+                <span class="phys-val" id="sim-depth-val">30 m</span>
+            </div>
+            <input type="range" class="phys-slider" id="sim-depth" min="5" max="300" step="1" value="30">
+        </div>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="sim-extent">Largeur / Étendue</label>
+                <span class="phys-val" id="sim-extent-val">100 m</span>
+            </div>
+            <input type="range" class="phys-slider" id="sim-extent" min="20" max="1000" step="5" value="100">
+        </div>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="sim-visibility">Visibilité / Turbidité</label>
+                <span class="phys-val" id="sim-visibility-val">25 m</span>
+            </div>
+            <input type="range" class="phys-slider" id="sim-visibility" min="1" max="60" step="1" value="25">
+        </div>
+    </div>
+
+    <!-- Panneau OSD (horizon artificiel) -->
+    <div class="panel" id="sim-osd-panel">
+        <h2>OSD — Horizon artificiel</h2>
+        <label class="chk-row">
+            <input type="checkbox" id="sim-osd-horizon-visible" checked> Afficher l'horizon
+        </label>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="sim-osd-horizon-opacity">Transparence</label>
+                <span class="phys-val" id="sim-osd-horizon-opacity-val">100 %</span>
+            </div>
+            <input type="range" class="phys-slider" id="sim-osd-horizon-opacity" min="0" max="100" step="1" value="100">
+        </div>
+        <div class="phys-row">
+            <div class="phys-head">
+                <label for="sim-osd-horizon-diameter">Diamètre</label>
+                <span class="phys-val" id="sim-osd-horizon-diameter-val">18 %</span>
+            </div>
+            <input type="range" class="phys-slider" id="sim-osd-horizon-diameter" min="8" max="40" step="1" value="18">
+        </div>
+    </div>
+
+    <!-- Panneau propulseurs M1-M8 -->
+    <div class="panel" id="sim-motors-panel">
+        <h2>Propulseurs (M1–M8)</h2>
+        <div class="m-group-title">🔴 Horizontaux</div>
+        <div id="sim-motors-h"></div>
+        <div class="m-group-title">🟢 Verticaux</div>
+        <div id="sim-motors-v"></div>
+    </div>
+
+    <!-- Panneau consignes 6DOF -->
+    <div class="panel" id="sim-dof-panel">
+        <h2>Consignes 6DOF</h2>
+        <div id="sim-dof-rows"></div>
+    </div>
+
+    <!-- Panneau télémétrie simulée -->
+    <div class="panel" id="sim-telemetry-panel">
+        <h2>Télémétrie</h2>
+        <div class="tq-grid">
+            <div class="tq-item"><span class="tq-label">Prof.</span><span class="tq-value" id="stq-depth">0.0m</span></div>
+            <div class="tq-item"><span class="tq-label">Temp.</span><span class="tq-value" id="stq-temp">20.0°C</span></div>
+            <div class="tq-item"><span class="tq-label">Cap</span><span class="tq-value" id="stq-heading">000°</span></div>
+            <div class="tq-item"><span class="tq-label">Batt.</span><span class="tq-value" id="stq-battery">100%</span></div>
+            <div class="tq-item"><span class="tq-label">Roulis</span><span class="tq-value" id="stq-roll">0.0°</span></div>
+            <div class="tq-item"><span class="tq-label">Tangage</span><span class="tq-value" id="stq-pitch">0.0°</span></div>
+        </div>
+    </div>
+
+    <!-- Aide contrôles -->
+    <div class="panel" id="sim-help">
+        🎮 <b>Manette</b> : joysticks = 6DOF &nbsp;·&nbsp; Bouton FPV = bascule vue<br>
+        🖱️ <b>Souris</b> : orbite (vue externe) &nbsp;·&nbsp; <b>Molette</b> : zoom
+    </div>
+
+    <script type="module" src="/js/simulator3d.js"></script>
+</body>
+</html>

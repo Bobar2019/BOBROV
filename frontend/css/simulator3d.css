@@ -1,0 +1,182 @@
+/* ============================================================================
+ * BOB-ROV · Sub-Simulator — Styles dédiés
+ * Reprend l'apparence du Visualiseur 3D (mapping3d) + overlay OSD cockpit
+ * ========================================================================== */
+
+:root {
+    --bg: #0b1020;
+    --panel: rgba(16, 24, 42, 0.82);
+    --border: #24304d;
+    --text: #e6ecff;
+    --muted: #8aa0c8;
+    --accent: #35d0ba;
+    --accent-red: #ff5a6a;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body {
+    background: radial-gradient(circle at 50% 30%, #16203c 0%, var(--bg) 70%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+#sim-container { position: fixed; inset: 0; z-index: 0; }
+canvas { display: block; }
+
+/* === BARRE SUPÉRIEURE === */
+.sim-topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 16px;
+    background: linear-gradient(180deg, rgba(11,16,32,0.9), transparent);
+}
+.sim-topbar h1 { font-size: 17px; font-weight: 600; letter-spacing: 0.3px; }
+.sim-topbar h1 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+.sim-btn-back {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 13px; cursor: pointer; font-size: 14px;
+    text-decoration: none; transition: background 0.15s, border-color 0.15s;
+}
+.sim-btn-back:hover { background: #1c2740; border-color: var(--accent); }
+.ws-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--accent-red);
+    box-shadow: 0 0 8px var(--accent-red); transition: background 0.2s;
+}
+.ws-dot.connected { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.gp-badge { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.fps-badge { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: auto; }
+
+/* === CANVAS OSD (superposé à la scène 3D, non interactif) === */
+#sim-osd-canvas {
+    position: fixed; inset: 0; z-index: 5;
+    pointer-events: none;
+}
+
+/* === PANNEAUX FLOTTANTS === */
+.panel {
+    position: fixed; z-index: 10;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+}
+.panel h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); margin-bottom: 9px; font-weight: 600;
+}
+.panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    margin-bottom: 9px; cursor: grab; user-select: none; touch-action: none;
+}
+.panel-head:active { cursor: grabbing; }
+.panel-head h2 { margin-bottom: 0; }
+.panel-toggle {
+    background: #1a2138; color: var(--muted); border: 1px solid var(--border);
+    border-radius: 6px; width: 24px; height: 20px; padding: 0; line-height: 1;
+    font-size: 9px; cursor: pointer; flex-shrink: 0;
+}
+.panel-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.panel.collapsed .panel-body { display: none; }
+.panel.collapsed .panel-head { margin-bottom: 0; }
+.panel.dragging { opacity: 0.92; box-shadow: 0 14px 44px rgba(0,0,0,0.6); transition: none; }
+
+/* Positions par défaut des panneaux */
+#sim-actions-panel { top: 58px; left: 14px; width: 200px; }
+#sim-phys-panel { top: 58px; right: 14px; width: 246px; }
+#sim-dive-panel { top: 58px; left: 228px; width: 236px; }
+#sim-osd-panel { top: 58px; left: 478px; width: 236px; }
+#sim-motors-panel { top: 300px; right: 14px; width: 246px; }
+#sim-dof-panel { bottom: 14px; left: 14px; width: 220px; }
+#sim-telemetry-panel { bottom: 14px; right: 14px; width: 220px; }
+#sim-help { bottom: 14px; right: 250px; font-size: 11px; color: var(--muted); max-width: 230px; line-height: 1.5; }
+
+/* === SLIDERS & CONTRÔLES === */
+.phys-row { margin-bottom: 11px; }
+.phys-row:last-child { margin-bottom: 2px; }
+.phys-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.phys-head label { font-size: 12px; color: var(--text); }
+.phys-val { font-size: 12px; color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+.phys-sub { font-size: 10px; color: var(--muted); margin-top: 4px; line-height: 1.3; }
+input[type=range].phys-slider {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 6px;
+    border-radius: 3px; background: #1a2138; outline: none; cursor: pointer;
+}
+input[type=range].phys-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--accent); border: 2px solid #0b1020;
+    box-shadow: 0 0 6px var(--accent);
+}
+input[type=range].phys-slider::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%; background: var(--accent);
+    border: 2px solid #0b1020; box-shadow: 0 0 6px var(--accent);
+}
+.chk-row {
+    display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+    cursor: pointer; user-select: none; margin-bottom: 10px;
+}
+.chk-row input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+
+/* === BOUTONS D'ACTION === */
+.act-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
+.act-btn {
+    grid-column: span 6;
+    background: #1a2138; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 6px; cursor: pointer; font-size: 13px;
+    font-weight: 600; text-align: center; user-select: none; white-space: nowrap;
+    transition: background 0.12s, border-color 0.12s, transform 0.05s;
+}
+.act-btn.half { grid-column: span 3; }
+.act-btn.third { grid-column: span 2; font-size: 12px; }
+.act-btn:hover { border-color: var(--accent); }
+.act-btn:active { transform: scale(0.95); background: #223052; }
+.act-btn.active {
+    border-color: var(--accent); color: var(--accent);
+    background: #14253f; box-shadow: 0 0 8px rgba(53,208,186,0.35);
+}
+#sim-btn-arm { border-color: var(--accent-red); color: var(--accent-red); }
+#sim-btn-arm.armed {
+    border-color: var(--accent); color: #0b1020; background: var(--accent);
+    box-shadow: 0 0 12px rgba(53,208,186,0.55);
+}
+
+/* === MOTEURS (barres de puissance) === */
+.m-group-title { font-size: 11px; color: var(--muted); margin: 8px 0 5px; }
+.m-group-title:first-of-type { margin-top: 0; }
+.m-row { display: grid; grid-template-columns: 14px 84px 1fr 40px; align-items: center; gap: 7px; margin-bottom: 5px; }
+.m-swatch { width: 11px; height: 11px; border-radius: 50%; }
+.m-swatch.h { background: #ff5a6a; box-shadow: 0 0 6px #ff5a6a; }
+.m-swatch.v { background: #35d0ba; box-shadow: 0 0 6px #35d0ba; }
+.m-name { font-size: 12px; white-space: nowrap; }
+.m-bar { height: 8px; background: #1a2138; border-radius: 4px; overflow: hidden; }
+.m-bar-fill { height: 100%; width: 0%; border-radius: 4px; transition: width 0.1s linear; }
+.m-pct { font-size: 11px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* === CONSIGNES 6DOF === */
+.dof-row { display: grid; grid-template-columns: 58px 1fr 46px; align-items: center; gap: 8px; margin-bottom: 5px; }
+.dof-label { font-size: 12px; color: var(--muted); }
+.dof-track { position: relative; height: 8px; background: #1a2138; border-radius: 4px; }
+.dof-track::before { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: #35405f; }
+.dof-fill { position: absolute; top: 0; height: 100%; background: var(--accent); border-radius: 4px; }
+.dof-val { font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* === TÉLÉMETRIE === */
+.tq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tq-item { display: flex; justify-content: space-between; font-size: 12px; }
+.tq-label { color: var(--muted); }
+.tq-value { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* === OVERLAY CHARGEMENT === */
+#sim-overlay {
+    position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; text-align: center;
+    background: rgba(8,12,24,0.92); padding: 24px;
+}
+#sim-overlay.hidden { display: none; }
+.spinner {
+    width: 44px; height: 44px; border: 4px solid #24304d; border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#sim-overlay .msg { font-size: 15px; }
+#sim-overlay .sub { font-size: 12px; color: var(--muted); }
+#sim-overlay.error .spinner { display: none; }
+#sim-overlay.error .msg { color: var(--accent-red); }
