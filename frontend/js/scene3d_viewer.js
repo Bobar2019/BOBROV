@@ -193,6 +193,29 @@ function close() {
 // ── Fonctions internes ──────────────────────────────────────────────────────
 
 /**
+ * Calcule la BoundingBox en ne considérant que les maillages réels (Mesh/SkinnedMesh),
+ * en ignorant les Bones, Caméras, Helpers et Null objects qui faussent les dimensions.
+ */
+function meshBoundingBox(model) {
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    let hasMesh = false;
+    model.traverse((child) => {
+        if (child.isMesh || child.isSkinnedMesh) {
+            if (child.geometry) {
+                child.geometry.computeBoundingBox();
+                const meshBox = child.geometry.boundingBox.clone();
+                meshBox.applyMatrix4(child.matrixWorld);
+                box.union(meshBox);
+                hasMesh = true;
+            }
+        }
+    });
+    if (!hasMesh) box.setFromObject(model);
+    return box;
+}
+
+/**
  * Callback appelé une fois le modèle GLB/GLTF chargé.
  * Centre le modèle, positionne la caméra et lance les animations.
  */
@@ -200,8 +223,8 @@ function _onModelLoaded(gltf) {
     const model = gltf.scene;
     _scene.add(model);
 
-    // ── Calcul de la BoundingBox ────────────────────────────────────────
-    const box = new THREE.Box3().setFromObject(model);
+    // ── Calcul de la BoundingBox (Mesh uniquement) ──────────────────────
+    const box = meshBoundingBox(model);
     const center = new THREE.Vector3();
     const size = new THREE.Vector3();
     box.getCenter(center);
@@ -341,8 +364,8 @@ async function generateThumbnail(modelUrl) {
         const model = gltf.scene;
         scene.add(model);
 
-        // Centrer et cadrer
-        const box = new THREE.Box3().setFromObject(model);
+        // Centrer et cadrer (Mesh uniquement)
+        const box = meshBoundingBox(model);
         const center = new THREE.Vector3();
         const size = new THREE.Vector3();
         box.getCenter(center);

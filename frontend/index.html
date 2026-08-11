@@ -98,6 +98,16 @@
                     </svg>
                     <span>CONFIG SCÈNE 3D</span>
                 </button>
+                <button class="nav-tile" data-tile="subsim" onclick="window.location.href='/subsim'">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <ellipse cx="12" cy="12" rx="10" ry="6"/>
+                        <path d="M12 6v12"/>
+                        <path d="M7 9l5 3 5-3"/>
+                        <circle cx="12" cy="12" r="2"/>
+                        <path d="M2 12c0 3.3 4.5 6 10 6s10-2.7 10-6"/>
+                    </svg>
+                    <span>Sub-Simulator</span>
+                </button>
             </nav>
         </header>
 
@@ -890,6 +900,94 @@
                             <tbody id="scene3d-objects-list"></tbody>
                         </table>
                         <p class="s3d-empty-msg" id="scene3d-empty-msg">Aucun objet configuré. Cliquez sur « + Ajouter un élément » pour commencer.</p>
+                    </div>
+                </div>
+
+                <!-- ── SECTION 3 : Environnement sous-marin ── -->
+                <div class="s3d-section s3d-section--environment">
+                    <h2 class="s3d-section-title">Environnement sous-marin</h2>
+
+                    <!-- Courant -->
+                    <div class="s3d-env-row">
+                        <div class="s3d-env-head">
+                            <label>Courant marin</label>
+                            <span class="s3d-env-val" id="env-current-val">50 %</span>
+                        </div>
+                        <input type="range" class="s3d-env-slider" id="env-current" min="0" max="100" step="1" value="50">
+                    </div>
+
+                    <!-- Récif - Algues -->
+                    <div class="s3d-env-group">
+                        <h3>🌿 Récif — Algues</h3>
+                        <label class="s3d-chk-row"><input type="checkbox" id="env-algae-enabled" checked> Activées</label>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Densité</label><span class="s3d-env-val" id="env-algae-density-val">22 %</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-algae-density" min="0" max="100" step="1" value="22">
+                        </div>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Longueur</label><span class="s3d-env-val" id="env-algae-length-val">1.0×</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-algae-length" min="0.1" max="3" step="0.1" value="1.0">
+                        </div>
+                    </div>
+
+                    <!-- Récif - Coraux -->
+                    <div class="s3d-env-group">
+                        <h3>🪸 Récif — Coraux</h3>
+                        <label class="s3d-chk-row"><input type="checkbox" id="env-corals-enabled" checked> Activés</label>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Densité</label><span class="s3d-env-val" id="env-corals-density-val">100 %</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-corals-density" min="0" max="100" step="1" value="100">
+                        </div>
+                    </div>
+
+                    <!-- Récif - Poissons -->
+                    <div class="s3d-env-group">
+                        <h3>🐠 Récif — Poissons</h3>
+                        <label class="s3d-chk-row"><input type="checkbox" id="env-fish-enabled" checked> Activés</label>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Nombre</label><span class="s3d-env-val" id="env-fish-count-val">360</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-fish-count" min="0" max="500" step="10" value="360">
+                        </div>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Vitesse</label><span class="s3d-env-val" id="env-fish-speed-val">1.0×</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-fish-speed" min="0.1" max="3" step="0.1" value="1.0">
+                        </div>
+                    </div>
+
+                    <!-- Abysses - Créatures -->
+                    <div class="s3d-env-group">
+                        <h3>🦑 Abysses — Créatures bioluminescentes</h3>
+                        <label class="s3d-chk-row"><input type="checkbox" id="env-abyss-enabled" checked> Activées</label>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Densité</label><span class="s3d-env-val" id="env-abyss-density-val">100 %</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-abyss-density" min="0" max="100" step="1" value="100">
+                        </div>
+                    </div>
+
+                    <!-- Abysses - Brochets -->
+                    <div class="s3d-env-group">
+                        <h3>🐊 Abysses — Brochets géants</h3>
+                        <label class="s3d-chk-row"><input type="checkbox" id="env-pikes-enabled" checked> Activés</label>
+                    </div>
+
+                    <!-- Terrain -->
+                    <div class="s3d-env-group">
+                        <h3>🏔️ Terrain</h3>
+                        <label class="s3d-chk-row"><input type="checkbox" id="env-terrain-enabled"> Relief activé</label>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Hauteur relief</label><span class="s3d-env-val" id="env-terrain-height-val">0.9</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-terrain-height" min="0" max="2" step="0.1" value="0.9">
+                        </div>
+                    </div>
+
+                    <!-- Parois -->
+                    <div class="s3d-env-group">
+                        <h3>🧱 Parois rocheuses</h3>
+                        <label class="s3d-chk-row"><input type="checkbox" id="env-walls-enabled"> Activées (mode fermé)</label>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Tiling texture</label><span class="s3d-env-val" id="env-walls-tiling-val">3.0</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-walls-tiling" min="1" max="8" step="0.5" value="3.0">
+                        </div>
                     </div>
                 </div>
 

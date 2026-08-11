@@ -22,7 +22,7 @@ const GamepadNav = (() => {
     const NAV_COOLDOWN = 200; // ms entre chaque déplacement (anti-repeat)
 
     // Tuiles dans l'ordre de la grille
-    const TILES = ['dashboard', 'cockpit', 'config-osd', 'config-cam', 'galerie', 'simulation', 'config-manette'];
+    const TILES = ['dashboard', 'cockpit', 'config-osd', 'config-cam', 'galerie', 'simulation', 'config-manette', 'mapping3d', 'config-scene-3d', 'subsim'];
     const GRID_COLS = 4; // colonnes en desktop
 
     // Éléments du menu contextuel (Triangle)

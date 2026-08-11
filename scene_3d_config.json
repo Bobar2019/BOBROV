@@ -4,27 +4,127 @@
       "name": "Guppy",
       "type": "decor",
       "model": "guppy.glb",
-      "real_size_m": 1,
-      "count": 1,
+      "real_size_m": 0.43,
+      "count": 8,
       "scale_min": 0.8,
       "scale_max": 1.2,
-      "kinematic": "fixe",
-      "zone": "surface",
+      "kinematic": "nageant",
+      "zone": "pleine_eau",
       "speed": 1,
-      "behavior": "nageant"
+      "behavior": "neant",
+      "trajectory": "libre",
+      "wander_radius": 5,
+      "turn_speed": 0.5
     },
     {
       "name": "alien",
       "type": "decor",
       "model": "alien_fish_animated.glb",
+      "real_size_m": 1.02,
+      "count": 11,
+      "scale_min": 0.8,
+      "scale_max": 1.2,
+      "kinematic": "nageant",
+      "zone": "surface",
+      "speed": 0.5,
+      "behavior": "curieux",
+      "trajectory": "libre",
+      "wander_radius": 3,
+      "turn_speed": 0.3
+    },
+    {
+      "name": "thon",
+      "type": "decor",
+      "model": "bluefin_tuna.glb",
+      "real_size_m": 1,
+      "count": 10,
+      "scale_min": 0.8,
+      "scale_max": 1.2,
+      "kinematic": "nageant",
+      "zone": "pleine_eau",
+      "speed": 1,
+      "behavior": "curieux",
+      "trajectory": "libre",
+      "wander_radius": 5,
+      "turn_speed": 0.4
+    },
+    {
+      "name": "monstre",
+      "type": "decor",
+      "model": "grunge_angler_fish_-_by_voodoodoo.glb",
+      "real_size_m": 0.69,
+      "count": 10,
+      "scale_min": 0.8,
+      "scale_max": 1.2,
+      "kinematic": "nageant",
+      "zone": "fond",
+      "speed": 0.3,
+      "behavior": "fuir",
+      "trajectory": "libre",
+      "wander_radius": 3,
+      "turn_speed": 0.2
+    },
+    {
+      "name": "Nouvel objet",
+      "type": "decor",
+      "model": "marine_life_fish_non-commercial.glb",
       "real_size_m": 1,
       "count": 1,
       "scale_min": 0.8,
       "scale_max": 1.2,
       "kinematic": "fixe",
-      "zone": "fond",
+      "zone": "pleine_eau",
+      "speed": 1,
+      "behavior": "nageant"
+    },
+    {
+      "name": "neon ",
+      "type": "decor",
+      "model": "paracheirodon_innesi___tetra_neon.glb",
+      "real_size_m": 0.5,
+      "count": 36,
+      "scale_min": 0.8,
+      "scale_max": 1.2,
+      "kinematic": "fixe",
+      "zone": "pleine_eau",
       "speed": 1,
       "behavior": "curieux"
     }
-  ]
+  ],
+  "environment": {
+    "current": 0.5,
+    "reef": {
+      "algae": {
+        "enabled": true,
+        "density": 0.45,
+        "length": 1.4
+      },
+      "corals": {
+        "enabled": true,
+        "density": 43
+      },
+      "fish": {
+        "enabled": true,
+        "count": 360,
+        "speed": 1.3
+      }
+    },
+    "abyss": {
+      "creatures": {
+        "enabled": true,
+        "density": 39
+      },
+      "pikes": {
+        "enabled": true
+      }
+    },
+    "terrain": {
+      "enabled": true,
+      "height": 0.9
+    },
+    "walls": {
+      "enabled": false,
+      "tiling": 3
+    }
+  }
 }

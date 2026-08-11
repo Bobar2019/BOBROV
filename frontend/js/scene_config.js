@@ -433,6 +433,133 @@ const SceneConfig = (() => {
     }
 
     // ==========================================================
+    // ENVIRONNEMENT SOUS-MARIN
+    // ==========================================================
+
+    /** Valeurs par défaut de l'environnement */
+    const DEFAULT_ENV = {
+        current: 0.5,
+        reef: {
+            algae: { enabled: true, density: 0.22, length: 1.0 },
+            corals: { enabled: true, density: 100 },
+            fish: { enabled: true, count: 360, speed: 1.0 },
+        },
+        abyss: {
+            creatures: { enabled: true, density: 100 },
+            pikes: { enabled: true },
+        },
+        terrain: { enabled: false, height: 0.9 },
+        walls: { enabled: false, tiling: 3.0 },
+    };
+
+    /** Garantit que la section environment existe dans la config */
+    function _ensureEnv() {
+        if (!_config.environment) _config.environment = JSON.parse(JSON.stringify(DEFAULT_ENV));
+        const env = _config.environment;
+        if (!env.reef) env.reef = JSON.parse(JSON.stringify(DEFAULT_ENV.reef));
+        if (!env.abyss) env.abyss = JSON.parse(JSON.stringify(DEFAULT_ENV.abyss));
+        if (!env.reef.algae) env.reef.algae = JSON.parse(JSON.stringify(DEFAULT_ENV.reef.algae));
+        if (!env.reef.corals) env.reef.corals = JSON.parse(JSON.stringify(DEFAULT_ENV.reef.corals));
+        if (!env.reef.fish) env.reef.fish = JSON.parse(JSON.stringify(DEFAULT_ENV.reef.fish));
+        if (!env.abyss.creatures) env.abyss.creatures = JSON.parse(JSON.stringify(DEFAULT_ENV.abyss.creatures));
+        if (!env.abyss.pikes) env.abyss.pikes = JSON.parse(JSON.stringify(DEFAULT_ENV.abyss.pikes));
+        if (!env.terrain) env.terrain = JSON.parse(JSON.stringify(DEFAULT_ENV.terrain));
+        if (!env.walls) env.walls = JSON.parse(JSON.stringify(DEFAULT_ENV.walls));
+        if (env.current === undefined) env.current = DEFAULT_ENV.current;
+    }
+
+    /** Bind un slider : lit la valeur, met à jour le label, sauvegarde au changement */
+    function _bindEnvSlider(id, getter, setter, formatter) {
+        const slider = document.getElementById(id);
+        const label = document.getElementById(id + '-val');
+        if (!slider) return;
+        slider.value = getter();
+        if (label) label.textContent = formatter(getter());
+        slider.addEventListener('input', () => {
+            const v = parseFloat(slider.value);
+            setter(v);
+            if (label) label.textContent = formatter(v);
+            _debounceSave();
+        });
+    }
+
+    /** Bind un checkbox : lit la valeur, sauvegarde au changement */
+    function _bindEnvCheck(id, getter, setter) {
+        const chk = document.getElementById(id);
+        if (!chk) return;
+        chk.checked = getter();
+        chk.addEventListener('change', () => {
+            setter(chk.checked);
+            _debounceSave();
+        });
+    }
+
+    /** Initialise les contrôles environnement */
+    function _initEnvironment() {
+        _ensureEnv();
+        const env = _config.environment;
+
+        // Courant
+        _bindEnvSlider('env-current',
+            () => Math.round(env.current * 100),
+            v => { env.current = v / 100; },
+            v => v + ' %');
+
+        // Algues
+        _bindEnvCheck('env-algae-enabled', () => env.reef.algae.enabled, v => { env.reef.algae.enabled = v; });
+        _bindEnvSlider('env-algae-density',
+            () => Math.round(env.reef.algae.density * 100),
+            v => { env.reef.algae.density = v / 100; },
+            v => v + ' %');
+        _bindEnvSlider('env-algae-length',
+            () => env.reef.algae.length,
+            v => { env.reef.algae.length = v; },
+            v => v.toFixed(1) + '\u00d7');
+
+        // Coraux
+        _bindEnvCheck('env-corals-enabled', () => env.reef.corals.enabled, v => { env.reef.corals.enabled = v; });
+        _bindEnvSlider('env-corals-density',
+            () => env.reef.corals.density,
+            v => { env.reef.corals.density = v; },
+            v => v + ' %');
+
+        // Poissons
+        _bindEnvCheck('env-fish-enabled', () => env.reef.fish.enabled, v => { env.reef.fish.enabled = v; });
+        _bindEnvSlider('env-fish-count',
+            () => env.reef.fish.count,
+            v => { env.reef.fish.count = v; },
+            v => '' + v);
+        _bindEnvSlider('env-fish-speed',
+            () => env.reef.fish.speed,
+            v => { env.reef.fish.speed = v; },
+            v => v.toFixed(1) + '\u00d7');
+
+        // Abysses - créatures
+        _bindEnvCheck('env-abyss-enabled', () => env.abyss.creatures.enabled, v => { env.abyss.creatures.enabled = v; });
+        _bindEnvSlider('env-abyss-density',
+            () => env.abyss.creatures.density,
+            v => { env.abyss.creatures.density = v; },
+            v => v + ' %');
+
+        // Brochets
+        _bindEnvCheck('env-pikes-enabled', () => env.abyss.pikes.enabled, v => { env.abyss.pikes.enabled = v; });
+
+        // Terrain
+        _bindEnvCheck('env-terrain-enabled', () => env.terrain.enabled, v => { env.terrain.enabled = v; });
+        _bindEnvSlider('env-terrain-height',
+            () => env.terrain.height,
+            v => { env.terrain.height = v; },
+            v => v.toFixed(1));
+
+        // Parois
+        _bindEnvCheck('env-walls-enabled', () => env.walls.enabled, v => { env.walls.enabled = v; });
+        _bindEnvSlider('env-walls-tiling',
+            () => env.walls.tiling,
+            v => { env.walls.tiling = v; },
+            v => v.toFixed(1));
+    }
+
+    // ==========================================================
     // INITIALISATION
     // ==========================================================
 
@@ -444,6 +571,7 @@ const SceneConfig = (() => {
             await _loadModels();
             _renderLibrary();
             _renderObjects();
+            _initEnvironment();
             return;
         }
 
@@ -452,6 +580,7 @@ const SceneConfig = (() => {
         await _loadModels();
         _renderLibrary();
         _renderObjects();
+        _initEnvironment();
 
         // Binder les boutons d'action principaux
         const btnAdd = document.getElementById('scene3d-btn-add');

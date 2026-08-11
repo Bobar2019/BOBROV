@@ -259,6 +259,15 @@ class WebServer:
                 return FileResponse(str(page_path), media_type="text/html")
             return HTMLResponse("<h1>Visualiseur 3D</h1><p>Page non trouvée.</p>")
 
+        # === SUB-SIMULATOR (simulateur sous-marin 3D) ===
+        @self.app.get("/subsim", response_class=HTMLResponse)
+        async def subsim():
+            """Page dédiée au Sub-Simulator 3D"""
+            page_path = Path("frontend/simulator3d.html")
+            if page_path.exists():
+                return FileResponse(str(page_path), media_type="text/html")
+            return HTMLResponse("<h1>Sub-Simulator</h1><p>Page non trouvée.</p>")
+
         # === API SANTÉ ===
         @self.app.get("/api/health")
         async def health():

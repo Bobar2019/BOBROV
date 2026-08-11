@@ -553,3 +553,89 @@
     background: #1f6feb;
     color: #fff;
 }
+
+/* ====== ENVIRONNEMENT SOUS-MARIN ====== */
+.s3d-section--environment {
+    margin-top: 20px;
+    padding: 16px;
+    background: rgba(11, 16, 32, 0.6);
+    border: 1px solid #1e2a42;
+    border-radius: 8px;
+}
+
+.s3d-env-group {
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: rgba(30, 42, 66, 0.35);
+    border: 1px solid #253552;
+    border-radius: 6px;
+}
+
+.s3d-env-group h3 {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    color: #8aa0c8;
+    font-weight: 600;
+}
+
+.s3d-env-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.s3d-env-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.s3d-env-head label {
+    font-size: 0.8rem;
+    color: #a0b4d0;
+}
+
+.s3d-env-val {
+    font-size: 0.78rem;
+    color: #35d0ba;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: right;
+}
+
+.s3d-env-slider {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #1a2540;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.s3d-env-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #35d0ba;
+    cursor: pointer;
+}
+
+.s3d-chk-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #a0b4d0;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+.s3d-chk-row input[type="checkbox"] {
+    accent-color: #35d0ba;
+    width: 16px;
+    height: 16px;
+}
