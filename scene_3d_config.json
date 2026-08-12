@@ -125,6 +125,7 @@
     "walls": {
       "enabled": true,
       "tiling": 5
-    }
+    },
+    "compact_zone": 100
   }
 }

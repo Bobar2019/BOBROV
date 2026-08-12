@@ -450,6 +450,7 @@ const SceneConfig = (() => {
         },
         terrain: { enabled: false, height: 0.9 },
         walls: { enabled: false, tiling: 3.0 },
+        compact_zone: 0,
     };
 
     /** Garantit que la section environment existe dans la config */
@@ -466,6 +467,7 @@ const SceneConfig = (() => {
         if (!env.terrain) env.terrain = JSON.parse(JSON.stringify(DEFAULT_ENV.terrain));
         if (!env.walls) env.walls = JSON.parse(JSON.stringify(DEFAULT_ENV.walls));
         if (env.current === undefined) env.current = DEFAULT_ENV.current;
+        if (env.compact_zone === undefined) env.compact_zone = DEFAULT_ENV.compact_zone;
     }
 
     /** Bind un slider : lit la valeur, met à jour le label, sauvegarde au changement */
@@ -557,6 +559,12 @@ const SceneConfig = (() => {
             () => env.walls.tiling,
             v => { env.walls.tiling = v; },
             v => v.toFixed(1));
+
+        // Zone compacte
+        _bindEnvSlider('env-compact-zone',
+            () => env.compact_zone,
+            v => { env.compact_zone = v; },
+            v => v + ' %');
     }
 
     // ==========================================================

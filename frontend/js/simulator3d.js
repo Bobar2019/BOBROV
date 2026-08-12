@@ -113,6 +113,7 @@ let envState = {
     corals: true, reefDensity: 100,
     abyssCreatures: true, abyssDensity: 100,
     pikes: true, pikeCount: 2,
+    compactZone: 0,  // 0-100% : 0 = bassin complet, 100 = zone 20m×20m
 };
 
 // Gamepad
@@ -544,12 +545,20 @@ function rebuildTerrainGeometry() {
 }
 
 
+// --- Compact zone : demi-largeur effective selon le slider (0% = bassin, 100% = 10m = zone 20×20) ---
+function compactHalfW() {
+    const pct = envState.compactZone / 100;
+    // Interpolation : 0% → WALL_LIMIT, 100% → 10 m
+    return THREE.MathUtils.lerp(WALL_LIMIT, 10, pct);
+}
+
 // Points aléatoires pour la vie sous-marine
 function randomFloorPoint(rng, margin) {
     let x, z;
+    const lim = compactHalfW() - margin;
     do {
-        x = (rng() * 2 - 1) * (WALL_LIMIT - margin);
-        z = (rng() * 2 - 1) * (WALL_LIMIT - margin);
+        x = (rng() * 2 - 1) * lim;
+        z = (rng() * 2 - 1) * lim;
     } while (Math.hypot(x, z) < LIFE_SPAWN_GUARD);
     return { x, z };
 }
@@ -729,6 +738,10 @@ async function loadEnvironmentConfig() {
         }
         if (env.walls) {
             diveState.walls = env.walls.enabled !== false;
+        }
+        // Zone compacte
+        if (env.compact_zone !== undefined) {
+            envState.compactZone = Math.max(0, Math.min(100, env.compact_zone));
         }
         // Construire/reconstruire terrain et parois selon la config JSON
         buildWalls();
@@ -988,10 +1001,10 @@ function updateFish(dt, time) {
             f.wander.set(Math.cos(a), (Math.random() - 0.5) * 0.5, Math.sin(a)).normalize();
         }
         _steer.copy(f.wander);
-        if (f.pos.x >  WALL_LIMIT - 1.5) _steer.x -= (f.pos.x - (WALL_LIMIT - 1.5));
-        if (f.pos.x < -WALL_LIMIT + 1.5) _steer.x += ((-WALL_LIMIT + 1.5) - f.pos.x);
-        if (f.pos.z >  WALL_LIMIT - 1.5) _steer.z -= (f.pos.z - (WALL_LIMIT - 1.5));
-        if (f.pos.z < -WALL_LIMIT + 1.5) _steer.z += ((-WALL_LIMIT + 1.5) - f.pos.z);
+        if (f.pos.x >  compactHalfW() - 1.5) _steer.x -= (f.pos.x - (compactHalfW() - 1.5));
+        if (f.pos.x < -compactHalfW() + 1.5) _steer.x += ((-compactHalfW() + 1.5) - f.pos.x);
+        if (f.pos.z >  compactHalfW() - 1.5) _steer.z -= (f.pos.z - (compactHalfW() - 1.5));
+        if (f.pos.z < -compactHalfW() + 1.5) _steer.z += ((-compactHalfW() + 1.5) - f.pos.z);
         const floorLim = floorLimitAt(f.pos.x, f.pos.z) + 0.35;
         if (f.pos.y < floorLim) _steer.y += (floorLim - f.pos.y) * 2.0;
         if (f.pos.y > CEIL_Y - 1.0) _steer.y -= (f.pos.y - (CEIL_Y - 1.0)) * 2.0;
@@ -1091,10 +1104,10 @@ function updateAbyss(dt, time) {
             f.wander.set(Math.cos(a), (Math.random() - 0.5) * 0.4, Math.sin(a)).normalize();
         }
         _steer.copy(f.wander);
-        if (f.pos.x >  WALL_LIMIT - 2) _steer.x -= (f.pos.x - (WALL_LIMIT - 2));
-        if (f.pos.x < -WALL_LIMIT + 2) _steer.x += ((-WALL_LIMIT + 2) - f.pos.x);
-        if (f.pos.z >  WALL_LIMIT - 2) _steer.z -= (f.pos.z - (WALL_LIMIT - 2));
-        if (f.pos.z < -WALL_LIMIT + 2) _steer.z += ((-WALL_LIMIT + 2) - f.pos.z);
+        if (f.pos.x >  compactHalfW() - 2) _steer.x -= (f.pos.x - (compactHalfW() - 2));
+        if (f.pos.x < -compactHalfW() + 2) _steer.x += ((-compactHalfW() + 2) - f.pos.x);
+        if (f.pos.z >  compactHalfW() - 2) _steer.z -= (f.pos.z - (compactHalfW() - 2));
+        if (f.pos.z < -compactHalfW() + 2) _steer.z += ((-compactHalfW() + 2) - f.pos.z);
         const floorLim = floorLimitAt(f.pos.x, f.pos.z) + 0.5;
         if (f.pos.y < floorLim) _steer.y += (floorLim - f.pos.y) * 2.0;
         if (f.pos.y > yTop) _steer.y -= (f.pos.y - yTop) * 1.5;
@@ -1226,7 +1239,7 @@ const SPAWN_GUARD_RADIUS = 5.0;  // mètres
 
 function positionInZone(group, obj) {
     const zone = obj.zone || 'pleine_eau';
-    const halfW = WALL_LIMIT * 0.8;
+    const halfW = compactHalfW() * 0.8;
     // --- Position X/Z avec garde anti-chevauchement ROV ---
     let x, z;
     for (let attempt = 0; attempt < 30; attempt++) {
@@ -1341,7 +1354,7 @@ function updateSceneObjects(dt) {
 }
 
 function clampToBasin(pos, zone) {
-    const lim = WALL_LIMIT * 0.9;
+    const lim = compactHalfW() * 0.9;
     pos.x = THREE.MathUtils.clamp(pos.x, -lim, lim);
     pos.z = THREE.MathUtils.clamp(pos.z, -lim, lim);
 
