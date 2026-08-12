@@ -149,6 +149,21 @@
       "enabled": true,
       "tiling": 5
     },
+    "surface": {
+      "waves": {
+        "enabled": true,
+        "height": 0.5,
+        "speed": 1
+      },
+      "caustics": {
+        "enabled": true,
+        "intensity": 0.7
+      },
+      "godrays": {
+        "enabled": true,
+        "intensity": 0.32
+      }
+    },
     "compact_zone": 15
   }
 }

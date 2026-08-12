@@ -479,6 +479,11 @@ const SceneConfig = (() => {
         },
         terrain: { enabled: false, height: 0.9 },
         walls: { enabled: false, tiling: 3.0 },
+        surface: {
+            waves: { enabled: true, height: 0.5, speed: 1.0 },
+            caustics: { enabled: true, intensity: 0.7 },
+            godrays: { enabled: true, intensity: 0.5 },
+        },
         compact_zone: 0,
     };
 
@@ -495,6 +500,10 @@ const SceneConfig = (() => {
         if (!env.abyss.pikes) env.abyss.pikes = JSON.parse(JSON.stringify(DEFAULT_ENV.abyss.pikes));
         if (!env.terrain) env.terrain = JSON.parse(JSON.stringify(DEFAULT_ENV.terrain));
         if (!env.walls) env.walls = JSON.parse(JSON.stringify(DEFAULT_ENV.walls));
+        if (!env.surface) env.surface = JSON.parse(JSON.stringify(DEFAULT_ENV.surface));
+        if (!env.surface.waves) env.surface.waves = JSON.parse(JSON.stringify(DEFAULT_ENV.surface.waves));
+        if (!env.surface.caustics) env.surface.caustics = JSON.parse(JSON.stringify(DEFAULT_ENV.surface.caustics));
+        if (!env.surface.godrays) env.surface.godrays = JSON.parse(JSON.stringify(DEFAULT_ENV.surface.godrays));
         if (env.current === undefined) env.current = DEFAULT_ENV.current;
         if (env.compact_zone === undefined) env.compact_zone = DEFAULT_ENV.compact_zone;
     }
@@ -588,6 +597,27 @@ const SceneConfig = (() => {
             () => env.walls.tiling,
             v => { env.walls.tiling = v; },
             v => v.toFixed(1));
+
+        // Surface / Vagues
+        _bindEnvCheck('env-waves-enabled', () => env.surface.waves.enabled, v => { env.surface.waves.enabled = v; });
+        _bindEnvSlider('env-waves-height',
+            () => env.surface.waves.height,
+            v => { env.surface.waves.height = v; },
+            v => v.toFixed(1) + ' m');
+        _bindEnvSlider('env-waves-speed',
+            () => env.surface.waves.speed,
+            v => { env.surface.waves.speed = v; },
+            v => v.toFixed(1) + '\u00d7');
+        _bindEnvCheck('env-caustics-enabled', () => env.surface.caustics.enabled, v => { env.surface.caustics.enabled = v; });
+        _bindEnvSlider('env-caustics-intensity',
+            () => Math.round(env.surface.caustics.intensity * 100),
+            v => { env.surface.caustics.intensity = v / 100; },
+            v => v + ' %');
+        _bindEnvCheck('env-godrays-enabled', () => env.surface.godrays.enabled, v => { env.surface.godrays.enabled = v; });
+        _bindEnvSlider('env-godrays-intensity',
+            () => Math.round(env.surface.godrays.intensity * 100),
+            v => { env.surface.godrays.intensity = v / 100; },
+            v => v + ' %');
 
         // Zone compacte
         _bindEnvSlider('env-compact-zone',

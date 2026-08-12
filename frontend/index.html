@@ -972,6 +972,30 @@
                         <label class="s3d-chk-row"><input type="checkbox" id="env-pikes-enabled" checked> Activés</label>
                     </div>
 
+                    <!-- Surface / Vagues -->
+                    <div class="s3d-env-group">
+                        <h3>🌊 Surface / Vagues <span class="s3d-info" data-tip="Rendu réaliste de la surface de l'eau avec vagues Gerstner, caustiques et rayons lumineux" tabindex="0">ⓘ</span></h3>
+                        <label class="s3d-chk-row"><input type="checkbox" id="env-waves-enabled" checked> Vagues activées</label>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Hauteur vagues <span class="s3d-info" data-tip="Amplitude des vagues Gerstner en mètres (0.1 = mer calme, 2.0 = forte houle)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-waves-height-val">0.5 m</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-waves-height" min="0.1" max="2" step="0.1" value="0.5">
+                        </div>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Vitesse vagues <span class="s3d-info" data-tip="Vitesse d'animation des vagues (multiplicateur)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-waves-speed-val">1.0×</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-waves-speed" min="0.1" max="3" step="0.1" value="1.0">
+                        </div>
+                        <label class="s3d-chk-row"><input type="checkbox" id="env-caustics-enabled" checked> Caustiques</label>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Intensité caustiques <span class="s3d-info" data-tip="Luminosité des motifs de caustiques projetées sur le fond (0 = désactivé)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-caustics-intensity-val">70 %</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-caustics-intensity" min="0" max="100" step="1" value="70">
+                        </div>
+                        <label class="s3d-chk-row"><input type="checkbox" id="env-godrays-enabled" checked> Rayons lumineux</label>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>Intensité rayons <span class="s3d-info" data-tip="Visibilité des rayons lumineux descendant de la surface (god rays)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-godrays-intensity-val">50 %</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-godrays-intensity" min="0" max="100" step="1" value="50">
+                        </div>
+                    </div>
+
                     <!-- Terrain -->
                     <div class="s3d-env-group">
                         <h3>🏔️ Terrain <span class="s3d-info" data-tip="Relief sous-marin : plateau corallien peu profond + fosse abyssale" tabindex="0">ⓘ</span></h3>
