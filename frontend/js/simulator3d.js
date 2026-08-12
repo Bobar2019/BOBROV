@@ -39,7 +39,7 @@ let wallsGroup = null, terrainMesh = null;
 let sunDir, sunFill, sunAmbient;
 const clock = new THREE.Clock();
 
-const physState = { inertia: 0.90, gain: 1.0, sens: 0.45 };
+const physState = { inertia: 0.90, gain: 1.0, sens: 0.45, rollSens: 1.0, pitchSens: 1.0 };
 const diveState = { depth: 30, visibility: 25, extent: 100, walls: true, terrain: false };
 let FLOOR_Y = -30.0;
 let WALL_LIMIT = 9.5;
@@ -1554,9 +1554,10 @@ function integratePhysics() {
     const inertia = physState.inertia;
     const gain = physState.gain;
 
-    // Rotations
+    // Rotations (avec sensibilité indépendante roll/pitch)
+    const rotSens = { yaw: 1.0, roll: physState.rollSens, pitch: physState.pitchSens };
     ['yaw', 'roll', 'pitch'].forEach(k => {
-        vel[k] = (vel[k] + target[k] * ROT_ACCEL) * inertia;
+        vel[k] = (vel[k] + target[k] * ROT_ACCEL * rotSens[k]) * inertia;
         current[k] += vel[k];
     });
     current.roll = wrapPi(current.roll);
@@ -1746,8 +1747,8 @@ function drawHorizon(ctx, cx, cy, w, h, roll, pitch, color, scale, fontSize, dia
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.save(); ctx.clip();
-    ctx.translate(cx, cy); ctx.rotate(-roll * Math.PI / 180);
-    const pitchOffset = pitch * pxPerDeg;
+    ctx.translate(cx, cy); ctx.rotate(-pitch * Math.PI / 180);
+    const pitchOffset = roll * pxPerDeg;
     const bandH = radius * 4;
     for (let k = -1; k <= 1; k++) {
         const base = pitchOffset + k * bandH * 2;
@@ -2048,7 +2049,7 @@ function loadSettings() {
 function saveSettings() {
     try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify({
-            physState: { inertia: physState.inertia, gain: physState.gain, sens: physState.sens },
+            physState: { inertia: physState.inertia, gain: physState.gain, sens: physState.sens, rollSens: physState.rollSens, pitchSens: physState.pitchSens },
             diveState: { depth: diveState.depth, visibility: diveState.visibility, extent: diveState.extent },
             osdConfig: { horizonVisible: osdConfig.horizonVisible, horizonOpacity: osdConfig.horizonOpacity,
                          horizonDiameter: osdConfig.horizonDiameter }
@@ -2070,6 +2071,8 @@ function syncSlidersUI() {
     sync('sim-inertia', physState.inertia, v => parseFloat(v).toFixed(2));
     sync('sim-gain',    physState.gain,    v => parseFloat(v).toFixed(1) + '×');
     sync('sim-sens',    physState.sens,    v => Math.round(parseFloat(v) * 100) + '%');
+    sync('sim-roll-sens',  physState.rollSens,  v => Math.round(parseFloat(v) * 100) + '%');
+    sync('sim-pitch-sens', physState.pitchSens, v => Math.round(parseFloat(v) * 100) + '%');
     sync('sim-depth',     diveState.depth,     v => v + ' m');
     sync('sim-extent',    diveState.extent,    v => v + ' m');
     sync('sim-visibility', diveState.visibility, v => v + ' m');
@@ -2098,6 +2101,8 @@ function bindSliders() {
     bind('sim-inertia', 'inertia', physState, v => parseFloat(v).toFixed(2));
     bind('sim-gain', 'gain', physState, v => parseFloat(v).toFixed(1) + '×');
     bind('sim-sens', 'sens', physState, v => Math.round(parseFloat(v) * 100) + '%');
+    bind('sim-roll-sens', 'rollSens', physState, v => Math.round(parseFloat(v) * 100) + '%');
+    bind('sim-pitch-sens', 'pitchSens', physState, v => Math.round(parseFloat(v) * 100) + '%');
     bind('sim-depth', 'depth', diveState, v => v + ' m', () => {
         FLOOR_Y = -diveState.depth;
         gridHelper.position.y = FLOOR_Y;

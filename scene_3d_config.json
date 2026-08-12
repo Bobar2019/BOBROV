@@ -92,16 +92,16 @@
     }
   ],
   "environment": {
-    "current": 0.5,
+    "current": 0.03,
     "reef": {
       "algae": {
         "enabled": true,
-        "density": 0.45,
-        "length": 1.4
+        "density": 0.81,
+        "length": 2.4
       },
       "corals": {
         "enabled": true,
-        "density": 43
+        "density": 71
       },
       "fish": {
         "enabled": true,
@@ -120,11 +120,11 @@
     },
     "terrain": {
       "enabled": true,
-      "height": 0.9
+      "height": 1.7
     },
     "walls": {
-      "enabled": false,
-      "tiling": 3
+      "enabled": true,
+      "tiling": 5
     }
   }
 }
