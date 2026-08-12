@@ -62,11 +62,7 @@
           }
         },
         "axes": {
-          "LEFT_X": {
-            "function": "turn",
-            "invert": true
-          },
-          "LEFT_Y": {
+          "RIGHT_Y": {
             "function": "forward_backward",
             "invert": true
           },
@@ -74,7 +70,11 @@
             "function": "lateral",
             "invert": false
           },
-          "RIGHT_Y": {
+          "LEFT_X": {
+            "function": "turn",
+            "invert": true
+          },
+          "LEFT_Y": {
             "function": "vertical",
             "invert": true
           }

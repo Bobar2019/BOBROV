@@ -33,31 +33,31 @@
       "turn_speed": 0.4
     },
     {
-      "name": "monstre",
+      "name": "Baleine ",
       "type": "faune",
-      "model": "grunge_angler_fish_-_by_voodoodoo.glb",
-      "real_size_m": 0.69,
-      "count": 5,
+      "model": "humpback_whale.glb",
+      "real_size_m": 10,
+      "count": 1,
       "scale_min": 0.8,
       "scale_max": 1.2,
       "kinematic": "nageant",
-      "zone": "fond",
-      "speed": 0.3,
-      "behavior": "fuir",
+      "zone": "surface",
+      "speed": 0.6,
+      "behavior": "curieux",
       "trajectory": "libre",
       "wander_radius": 3,
       "turn_speed": 0.2
     },
     {
-      "name": "Nouvel objet",
+      "name": "Baleine blue",
       "type": "faune",
-      "model": "marine_life_fish_non-commercial.glb",
-      "real_size_m": 1,
+      "model": "blue_whale_-_textured.glb",
+      "real_size_m": 15,
       "count": 1,
       "scale_min": 0.8,
       "scale_max": 1.2,
       "kinematic": "fixe",
-      "zone": "pleine_eau",
+      "zone": "surface",
       "speed": 1,
       "behavior": "nageant"
     },
@@ -86,6 +86,19 @@
       "zone": "fond",
       "speed": 0.3,
       "behavior": "curieux"
+    },
+    {
+      "name": "plante ",
+      "type": "flore",
+      "model": "sea_weed.glb",
+      "real_size_m": 1.39,
+      "count": 1,
+      "scale_min": 0.8,
+      "scale_max": 1.2,
+      "kinematic": "ancre_ondule",
+      "zone": "fond",
+      "speed": 1,
+      "behavior": "neant"
     }
   ],
   "environment": {
@@ -120,7 +133,7 @@
       "height": 1.7
     },
     "walls": {
-      "enabled": true,
+      "enabled": false,
       "tiling": 5
     },
     "compact_zone": 100

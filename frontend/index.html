@@ -912,7 +912,7 @@
                     <!-- Courant -->
                     <div class="s3d-env-row">
                         <div class="s3d-env-head">
-                            <label>Courant marin</label>
+                            <label>Courant marin <span class="s3d-info" data-tip="Force du courant marin qui influence l'oscillation des algues et de la végétation" tabindex="0">ⓘ</span></label>
                             <span class="s3d-env-val" id="env-current-val">50 %</span>
                         </div>
                         <input type="range" class="s3d-env-slider" id="env-current" min="0" max="100" step="1" value="50">
@@ -920,81 +920,81 @@
 
                     <!-- Récif - Algues -->
                     <div class="s3d-env-group">
-                        <h3>🌿 Récif — Algues</h3>
+                        <h3>🌿 Récif — Algues <span class="s3d-info" data-tip="Algues procédurales sur le plateau corallien, animées par le courant" tabindex="0">ⓘ</span></h3>
                         <label class="s3d-chk-row"><input type="checkbox" id="env-algae-enabled" checked> Activées</label>
                         <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>Densité</label><span class="s3d-env-val" id="env-algae-density-val">22 %</span></div>
+                            <div class="s3d-env-head"><label>Densité <span class="s3d-info" data-tip="Nombre de touffes d'algues par m² sur le récif" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-algae-density-val">22 %</span></div>
                             <input type="range" class="s3d-env-slider" id="env-algae-density" min="0" max="100" step="1" value="22">
                         </div>
                         <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>Longueur</label><span class="s3d-env-val" id="env-algae-length-val">1.0×</span></div>
+                            <div class="s3d-env-head"><label>Longueur <span class="s3d-info" data-tip="Taille des brins d'algues (multiplicateur de la longueur de base)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-algae-length-val">1.0×</span></div>
                             <input type="range" class="s3d-env-slider" id="env-algae-length" min="0.1" max="3" step="0.1" value="1.0">
                         </div>
                     </div>
 
                     <!-- Récif - Coraux -->
                     <div class="s3d-env-group">
-                        <h3>🪸 Récif — Coraux</h3>
+                        <h3>🪸 Récif — Coraux <span class="s3d-info" data-tip="Coraux procéduraux colorés sur le plateau corallien" tabindex="0">ⓘ</span></h3>
                         <label class="s3d-chk-row"><input type="checkbox" id="env-corals-enabled" checked> Activés</label>
                         <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>Densité</label><span class="s3d-env-val" id="env-corals-density-val">100 %</span></div>
+                            <div class="s3d-env-head"><label>Densité <span class="s3d-info" data-tip="Pourcentage de couverture corallienne sur le récif" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-corals-density-val">100 %</span></div>
                             <input type="range" class="s3d-env-slider" id="env-corals-density" min="0" max="100" step="1" value="100">
                         </div>
                     </div>
 
                     <!-- Récif - Poissons -->
                     <div class="s3d-env-group">
-                        <h3>🐠 Récif — Poissons</h3>
+                        <h3>🐠 Récif — Poissons <span class="s3d-info" data-tip="Bancs de poissons procéduraux qui fuient à l'approche du ROV" tabindex="0">ⓘ</span></h3>
                         <label class="s3d-chk-row"><input type="checkbox" id="env-fish-enabled" checked> Activés</label>
                         <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>Nombre</label><span class="s3d-env-val" id="env-fish-count-val">360</span></div>
+                            <div class="s3d-env-head"><label>Nombre <span class="s3d-info" data-tip="Nombre total de poissons répartis en bancs (max 500)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-fish-count-val">360</span></div>
                             <input type="range" class="s3d-env-slider" id="env-fish-count" min="0" max="500" step="10" value="360">
                         </div>
                         <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>Vitesse</label><span class="s3d-env-val" id="env-fish-speed-val">1.0×</span></div>
+                            <div class="s3d-env-head"><label>Vitesse <span class="s3d-info" data-tip="Multiplicateur de vitesse de nage des poissons" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-fish-speed-val">1.0×</span></div>
                             <input type="range" class="s3d-env-slider" id="env-fish-speed" min="0.1" max="3" step="0.1" value="1.0">
                         </div>
                     </div>
 
                     <!-- Abysses - Créatures -->
                     <div class="s3d-env-group">
-                        <h3>🦑 Abysses — Créatures bioluminescentes</h3>
+                        <h3>🦑 Abysses — Créatures bioluminescentes <span class="s3d-info" data-tip="Petites créatures lumineuses dans la fosse abyssale, visibles sous le plateau corallien" tabindex="0">ⓘ</span></h3>
                         <label class="s3d-chk-row"><input type="checkbox" id="env-abyss-enabled" checked> Activées</label>
                         <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>Densité</label><span class="s3d-env-val" id="env-abyss-density-val">100 %</span></div>
+                            <div class="s3d-env-head"><label>Densité <span class="s3d-info" data-tip="Nombre de créatures abyssales (pourcentage du maximum)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-abyss-density-val">100 %</span></div>
                             <input type="range" class="s3d-env-slider" id="env-abyss-density" min="0" max="100" step="1" value="100">
                         </div>
                     </div>
 
                     <!-- Abysses - Brochets -->
                     <div class="s3d-env-group">
-                        <h3>🐊 Abysses — Brochets géants</h3>
+                        <h3>🐊 Abysses — Brochets géants <span class="s3d-info" data-tip="Prédateurs qui patrouillent la fosse et poursuivent le ROV en profondeur" tabindex="0">ⓘ</span></h3>
                         <label class="s3d-chk-row"><input type="checkbox" id="env-pikes-enabled" checked> Activés</label>
                     </div>
 
                     <!-- Terrain -->
                     <div class="s3d-env-group">
-                        <h3>🏔️ Terrain</h3>
+                        <h3>🏔️ Terrain <span class="s3d-info" data-tip="Relief sous-marin : plateau corallien peu profond + fosse abyssale" tabindex="0">ⓘ</span></h3>
                         <label class="s3d-chk-row"><input type="checkbox" id="env-terrain-enabled"> Relief activé</label>
                         <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>Hauteur relief</label><span class="s3d-env-val" id="env-terrain-height-val">0.9</span></div>
+                            <div class="s3d-env-head"><label>Hauteur relief <span class="s3d-info" data-tip="Amplitude du relief en mètres (0 = fond plat)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-terrain-height-val">0.9</span></div>
                             <input type="range" class="s3d-env-slider" id="env-terrain-height" min="0" max="2" step="0.1" value="0.9">
                         </div>
                     </div>
 
                     <!-- Parois -->
                     <div class="s3d-env-group">
-                        <h3>🧱 Parois rocheuses</h3>
+                        <h3>🧱 Parois rocheuses <span class="s3d-info" data-tip="Murs texturés autour du bassin pour un effet fermé (piscine, aquarium)" tabindex="0">ⓘ</span></h3>
                         <label class="s3d-chk-row"><input type="checkbox" id="env-walls-enabled"> Activées (mode fermé)</label>
                         <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>Tiling texture</label><span class="s3d-env-val" id="env-walls-tiling-val">3.0</span></div>
+                            <div class="s3d-env-head"><label>Tiling texture <span class="s3d-info" data-tip="Nombre de répétitions de la texture rocheuse sur chaque paroi" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-walls-tiling-val">3.0</span></div>
                             <input type="range" class="s3d-env-slider" id="env-walls-tiling" min="1" max="8" step="0.5" value="3.0">
                         </div>
                     </div>
 
                     <!-- Zone compacte -->
                     <div class="s3d-env-group">
-                        <h3>🎯 Zone d'inspection compacte</h3>
+                        <h3>🎯 Zone d'inspection compacte <span class="s3d-info" data-tip="Regroupe toute la faune et objets dans une zone restreinte autour du ROV pour faciliter les tests visuels" tabindex="0">ⓘ</span></h3>
                         <div class="s3d-env-row">
                             <div class="s3d-env-head"><label>Concentration faune</label><span class="s3d-env-val" id="env-compact-zone-val">0 %</span></div>
                             <input type="range" class="s3d-env-slider" id="env-compact-zone" min="0" max="100" step="5" value="0">

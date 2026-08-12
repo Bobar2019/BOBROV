@@ -686,6 +686,17 @@ async function loadScene3DConfig() {
                         velocity: new THREE.Vector3(),
                         targetYaw: Math.random() * Math.PI * 2,
                         changeTimer: Math.random() * 5,
+                        baseY: instanceGroup.position.y,
+                        // Paramètres trajectoire en huit (∞)
+                        path8: {
+                            cx: instanceGroup.position.x,
+                            cz: instanceGroup.position.z,
+                            rx: 3 + Math.random() * 5,       // rayon X (3-8m)
+                            rz: 3 + Math.random() * 5,       // rayon Z (3-8m)
+                            phase: Math.random() * Math.PI * 2,
+                            dir: Math.random() > 0.5 ? 1 : -1,
+                            yAmp: 0.2 + Math.random() * 0.4, // amplitude verticale
+                        },
                     });
                     scene.add(instanceGroup);
                 }
@@ -959,7 +970,7 @@ function buildFish() {
     fishMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     fishMesh.frustumCulled = false;
     const rng = mulberry32(4242);
-    const palette = [0xff7818, 0x2e6bff, 0xffd41e, 0xff9a3d, 0x27d0e8, 0xff5540];
+    const palette = [0x6b8fa3, 0x8fa5a0, 0xb8a882, 0x7a9b8e, 0x5e8ea6, 0x9a8b78];
     const cTint = new THREE.Color();
     const homes = [];
     for (let s = 0; s < FISH_SCHOOLS; s++) {
@@ -977,7 +988,7 @@ function buildFish() {
             timer: rng() * 3, phase: rng() * Math.PI * 2,
             size: 0.75 + rng() * 0.6, flee: 0, home: schoolHome,
         });
-        cTint.setHex(palette[i % palette.length]).offsetHSL((rng() - 0.5) * 0.05, 0, (rng() - 0.5) * 0.1);
+        cTint.setHex(palette[i % palette.length]).offsetHSL((rng() - 0.5) * 0.04, -0.12, (rng() - 0.5) * 0.06);
         fishMesh.setColorAt(i, cTint);
         const fi = fishData[i];
         _lifeQ.setFromUnitVectors(_Z_AXIS, fi.dir);
@@ -1259,7 +1270,12 @@ function positionInZone(group, obj) {
             // Utilise la hauteur réelle du terrain (fosse abyssale incluse)
             {
                 const floorY = terrainMeshHeightAt(x, z);
-                y = floorY + 0.3 + Math.random() * 2.7;
+                if (obj.type === 'flore') {
+                    // Flore : ancrée directement au sol
+                    y = floorY + 0.05;
+                } else {
+                    y = floorY + 0.3 + Math.random() * 2.7;
+                }
             }
             break;
         case 'pleine_eau':
@@ -1323,40 +1339,70 @@ function updateSceneObjects(dt) {
             // 'neant' : comportement normal inchangé
         }
 
-        // --- Mode cinématique : nageant ---
+        // --- Mode cinématique : nageant (trajectoire en huit ∞) ---
         if (kinematic === 'nageant') {
-            // Changement de direction aléatoire (errance libre)
-            obj.changeTimer -= dt;
-            if (obj.changeTimer <= 0 && !iaOverride) {
-                obj.targetYaw = Math.random() * Math.PI * 2;
-                obj.changeTimer = 3 + Math.random() * 5;
+            const p = obj.path8;
+            // Avancer la phase sur la courbe
+            p.phase += currentSpeed * dt * 0.3 * p.dir;
+
+            // --- Comportement IA : override la trajectoire si proche du ROV ---
+            if (iaOverride) {
+                // Déplacement direct vers la cible (fuir/curieux)
+                const targetQ = new THREE.Quaternion().setFromAxisAngle(
+                    new THREE.Vector3(0, 1, 0), obj.targetYaw
+                );
+                const slerpFactor = Math.min(0.12, turnSpeed * 0.08 * dt * 60);
+                obj.group.quaternion.slerp(targetQ, slerpFactor);
+                const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(obj.group.quaternion);
+                obj.group.position.addScaledVector(forward, currentSpeed * dt);
+                // Recentrer le huit sur la nouvelle position
+                p.cx = obj.group.position.x;
+                p.cz = obj.group.position.z;
+            } else {
+                // --- Trajectoire en huit (lemniscate) ---
+                const t8 = p.phase;
+                const sinT = Math.sin(t8), cosT = Math.cos(t8);
+                const denom = 1 + sinT * sinT;
+                // Position sur la lemniscate
+                const newX = p.cx + p.rx * cosT / denom;
+                const newZ = p.cz + p.rz * sinT * cosT / denom;
+                // Tangente = direction naturelle
+                const dx = newX - obj.group.position.x;
+                const dz = newZ - obj.group.position.z;
+                const tangentYaw = Math.atan2(dx, dz);
+                // Orientation fluide (slerp) le long de la tangente
+                const slerpFactor = Math.min(0.18, turnSpeed * 0.12 * dt * 60);
+                const targetQ = new THREE.Quaternion().setFromAxisAngle(
+                    new THREE.Vector3(0, 1, 0), tangentYaw
+                );
+                obj.group.quaternion.slerp(targetQ, slerpFactor);
+                // Appliquer la position
+                obj.group.position.x = newX;
+                obj.group.position.z = newZ;
+                // Léger mouvement vertical sinusoïdal
+                const baseY = obj.baseY != null ? obj.baseY : obj.group.position.y;
+                obj.group.position.y = baseY + Math.sin(t8 * 2) * p.yAmp;
+                obj.baseY = baseY;
             }
-
-            // Orientation fluide (slerp) — turnSpeed pondère le facteur
-            const slerpFactor = Math.min(0.15, turnSpeed * 0.1 * dt * 60);
-            const targetQ = new THREE.Quaternion().setFromAxisAngle(
-                new THREE.Vector3(0, 1, 0), obj.targetYaw
-            );
-            obj.group.quaternion.slerp(targetQ, slerpFactor);
-
-            // Déplacement vers l'avant (axe Z local)
-            const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(obj.group.quaternion);
-            obj.group.position.addScaledVector(forward, currentSpeed * dt);
-
-            // Léger balancement naturel (tangage/roulis visuel)
-            const t = clock.elapsedTime;
-            obj.group.rotation.x = Math.sin(t * 0.7 + obj.group.position.x * 2) * 0.04;
-            obj.group.rotation.z = Math.sin(t * 0.5 + obj.group.position.z * 2) * 0.03;
 
             // Limites du bassin + maintien dans la zone de profondeur
             clampToBasin(obj.group.position, obj.config.zone);
+            // Recentrer le huit si sorti du bassin
+            const lim = compactHalfW() * 0.7;
+            if (Math.abs(p.cx) > lim || Math.abs(p.cz) > lim) {
+                p.cx = (Math.random() * 2 - 1) * lim * 0.6;
+                p.cz = (Math.random() * 2 - 1) * lim * 0.6;
+            }
 
-        // --- Mode cinématique : ancre_ondule (algues, coraux mous) ---
+        // --- Mode cinématique : ancre_ondule (flore, algues, coraux mous) ---
         } else if (kinematic === 'ancre_ondule') {
             const t = clock.elapsedTime;
-            const amp = (cfg.speed || 1) * 0.003;
-            obj.group.position.y += Math.sin(t * 1.5 + obj.group.position.x) * amp;
-            obj.group.rotation.z = Math.sin(t * 0.8 + obj.group.position.z) * 0.12;
+            // Restaurer Y à la base (ancré au sol) puis légère oscillation
+            const baseY = obj.baseY != null ? obj.baseY : obj.group.position.y;
+            const sway = (cfg.speed || 1) * 0.02;
+            obj.group.position.y = baseY + Math.sin(t * 1.2 + obj.group.position.x) * sway;
+            // Rotation Z = ondulation douce (courant marin)
+            obj.group.rotation.z = Math.sin(t * 0.8 + obj.group.position.z) * 0.08;
         }
     });
 }

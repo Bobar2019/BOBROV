@@ -596,6 +596,88 @@
     color: #a0b4d0;
 }
 
+.s3d-info {
+    display: inline-block;
+    position: relative;
+    font-size: 0.65rem;
+    width: 15px;
+    height: 15px;
+    line-height: 15px;
+    text-align: center;
+    border-radius: 50%;
+    background: rgba(53, 208, 186, 0.18);
+    color: #35d0ba;
+    cursor: help;
+    vertical-align: middle;
+    margin-left: 4px;
+    font-style: normal;
+    user-select: none;
+    outline: none;
+}
+
+.s3d-info:hover,
+.s3d-info:focus {
+    background: rgba(53, 208, 186, 0.4);
+    color: #fff;
+}
+
+.s3d-info::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #162040;
+    color: #c9ddf8;
+    border: 1px solid #35d0ba;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 0.74rem;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: normal;
+    width: max-content;
+    max-width: 220px;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+    z-index: 9999;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+
+/* Flèche en bas du tooltip */
+.s3d-info::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #35d0ba;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+    z-index: 9999;
+}
+
+.s3d-info:hover::after,
+.s3d-info:hover::before,
+.s3d-info:focus::after,
+.s3d-info:focus::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Version plus grande pour les titres de section */
+h3 .s3d-info,
+.s3d-section-title .s3d-info {
+    font-size: 0.7rem;
+    width: 17px;
+    height: 17px;
+    line-height: 17px;
+}
+
 .s3d-env-val {
     font-size: 0.78rem;
     color: #35d0ba;
