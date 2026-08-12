@@ -40,7 +40,8 @@ let sunDir, sunFill, sunAmbient;
 const clock = new THREE.Clock();
 
 const physState = { inertia: 0.90, gain: 1.0, sens: 0.45, rollSens: 1.0, pitchSens: 1.0 };
-const diveState = { depth: 30, visibility: 25, extent: 100, walls: true, terrain: false };
+const diveState = { depth: 30, visibility: 25, extent: 100, walls: true, terrain: false, reliefHeight: 5, abyssDepth: 15, abyssRadius: 45,
+                    led: false, ledIntensity: 80, ledTilt: 12 };
 let FLOOR_Y = -30.0;
 let WALL_LIMIT = 9.5;
 let WALL_POS = 10.0;
@@ -72,6 +73,11 @@ let rovFitScale = 1;
 const rovFitOffset = new THREE.Vector3();
 const envMats = [];
 
+// --- Projecteurs LED (projecteur.glb) ---
+let projGroup = null;
+let projSpots = [];
+const LED_MAX_INTENSITY = 320;
+
 // --- Vie sous-marine (InstancedMesh procéduraux) ---
 const ALGAE_MAX_TUFTS = 500, ALGAE_BLADES = 5, FISH_MAX = 500;
 const FISH_SCARE_DIST = 2.2, FISH_SCHOOLS = 8, LIFE_SPAWN_GUARD = 2.0;
@@ -88,7 +94,7 @@ const coralData = [[], [], [], []];
 const fishData = [];
 const abyssData = [];
 const pikeData = [];
-let wallTex = null, wallMat = null, terrainTex = null;
+let wallTex = null, wallNrm = null, wallMat = null, terrainTex = null;
 const _lifeM4 = new THREE.Matrix4();
 const _lifeQ = new THREE.Quaternion();
 const _lifeQ2 = new THREE.Quaternion();
@@ -350,6 +356,9 @@ function loadModel() {
         modelGroup.add(model);
         rovFitScale = scale;
         rovFitOffset.copy(scaledCenter).negate();
+        // Initialiser et charger les projecteurs LED
+        initProjectors();
+        loadProjectorModel();
         hideOverlay();
     }, (xhr) => {
         if (xhr.total) {
@@ -387,18 +396,21 @@ function fbm2(x, z) {
 // Hauteur du relief : Blue Hole (plateau corallien + fosse abyssale)
 function terrainHeightAt(x, z) {
     // === Blue Hole : plateau corallien + fosse abyssale centrale ===
-    const plateauBase = Math.max(FLOOR_Y, -REEF_DEPTH);
-    const coral = Math.pow(fbm2(x * 0.35 + 7.3, z * 0.35 + 3.1), 1.6) * (diveState.terrain ? 0.9 : 0)
-                + fbm2(x * 1.1 + 19.7, z * 1.1 + 5.9) * 0.8;
+    const reliefAmp = diveState.reliefHeight;  // amplitude du relief (stalactites/stalagmites)
+    const abyssBelow = diveState.abyssDepth;   // profondeur de la fosse sous le plateau
+    const pitPct = diveState.abyssRadius / 100; // rayon fosse en % de WALL_POS
+    const plateauBase = Math.max(FLOOR_Y, -(REEF_DEPTH + reliefAmp));
+    const coral = Math.pow(fbm2(x * 0.35 + 7.3, z * 0.35 + 3.1), 1.6) * (diveState.terrain ? reliefAmp * 0.18 : 0)
+                + fbm2(x * 1.1 + 19.7, z * 1.1 + 5.9) * reliefAmp * 0.16;
     const plateauY = Math.min(plateauBase + (diveState.terrain ? coral : 0), -1.0);
-    if (FLOOR_Y >= -REEF_DEPTH - 1) return plateauY;
-    const R = WALL_POS * PIT_RADIUS_K;
+    if (FLOOR_Y >= -(REEF_DEPTH + reliefAmp) - 1) return plateauY;
+    const R = WALL_POS * pitPct;
     const rim = (fbm2(x * 0.05 + 31.4, z * 0.05 + 12.8) - 0.5) * R * 0.35;
     const r = Math.hypot(x, z) + rim;
     if (r >= R) return plateauY;
     const t = THREE.MathUtils.smoothstep(r, R * 0.45, R);
     const s = t * t * (3 - 2 * t);
-    const abyssY = FLOOR_Y + fbm2(x * 0.06 + 3.7, z * 0.06 + 8.2) * 3.0;
+    const abyssY = Math.max(FLOOR_Y, plateauY - abyssBelow) + fbm2(x * 0.06 + 3.7, z * 0.06 + 8.2) * 3.0;
     return abyssY + (plateauY - abyssY) * s;
 }
 
@@ -444,18 +456,24 @@ function mulberry32(seed) {
 
 // Texture de roche procédurale (canvas 256²)
 function makeRockTexture() {
-    const size = 256;
+    const size = 512;
     const cv = document.createElement('canvas');
     cv.width = cv.height = size;
     const ctx = cv.getContext('2d');
     const img = ctx.createImageData(size, size);
     for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
-            const n = fbm2(x * 0.045, y * 0.045) * 0.7 + fbm2(x * 0.18 + 41, y * 0.18 + 17) * 0.3;
-            const v = 46 + n * 78;
+            const n1 = fbm2(x * 0.045, y * 0.045);
+            const n2 = fbm2(x * 0.18 + 41, y * 0.18 + 17);
+            const detail = fbm2(x * 0.4 + 83, y * 0.4 + 57);
+            const n = n1 * 0.55 + n2 * 0.3 + detail * 0.15;
+            const v = 35 + n * 85;
             const i = (y * size + x) * 4;
-            img.data[i] = v * 0.96; img.data[i + 1] = v * 0.90;
-            img.data[i + 2] = v * 0.78; img.data[i + 3] = 255;
+            // Variations naturelles : terre, gris, mousse
+            img.data[i]     = v * (0.90 + n1 * 0.18);
+            img.data[i + 1] = v * (0.85 + n2 * 0.10);
+            img.data[i + 2] = v * (0.72 + detail * 0.14);
+            img.data[i + 3] = 255;
         }
     }
     ctx.putImageData(img, 0, 0);
@@ -466,34 +484,95 @@ function makeRockTexture() {
     return tex;
 }
 
+// Normal map procédural pour relief rocheux
+function makeRockNormalMap() {
+    const size = 512;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    const img = ctx.createImageData(size, size);
+    const str = 3.0;
+    const sc = 0.06;
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const hL = fbm2((x - 1) * sc, y * sc);
+            const hR = fbm2((x + 1) * sc, y * sc);
+            const hU = fbm2(x * sc, (y - 1) * sc);
+            const hD = fbm2(x * sc, (y + 1) * sc);
+            let nx = (hL - hR) * str;
+            let ny = (hU - hD) * str;
+            let nz = 1.0;
+            const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            nx /= len; ny /= len; nz /= len;
+            const i = (y * size + x) * 4;
+            img.data[i]     = (nx * 0.5 + 0.5) * 255;
+            img.data[i + 1] = (ny * 0.5 + 0.5) * 255;
+            img.data[i + 2] = (nz * 0.5 + 0.5) * 255;
+            img.data[i + 3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+}
+
 function wallHeight() { return CEIL_Y - FLOOR_Y; }
 
-// Parois rocheuses texturées (faces intérieures uniquement)
+// Parois rocheuses inclinées à 45° avec relief irrégulier
 function buildWalls() {
     if (wallsGroup) { scene.remove(wallsGroup); wallsGroup.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); wallsGroup = null; }
     if (!diveState.walls) return;
     if (!wallTex) wallTex = makeRockTexture();
+    if (!wallNrm) wallNrm = makeRockNormalMap();
     if (!wallMat) {
-        wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.95, metalness: 0.0 });
+        wallMat = new THREE.MeshStandardMaterial({
+            map: wallTex, normalMap: wallNrm, normalScale: new THREE.Vector2(1.8, 1.8),
+            roughness: 0.95, metalness: 0.0,
+        });
         envMats.push(wallMat);
     }
     const h = wallHeight();
+    const wallW = WALL_POS * 2;
+    // Position des centres pour parois inclinées à 45° vers l'extérieur
+    const halfH = h / 2;
+    const offset = halfH * Math.SQRT1_2; // h/(2√2) ≈ 4.6m pour h=13
     wallsGroup = new THREE.Group();
+    // 4 parois inclinées 45° vers l'extérieur (évasées)
     [
-        { x: 0, z: -WALL_POS, ry: 0 },
-        { x: 0, z: +WALL_POS, ry: Math.PI },
-        { x: -WALL_POS, z: 0, ry: Math.PI / 2 },
-        { x: +WALL_POS, z: 0, ry: -Math.PI / 2 },
+        { x: 0,             z: -(WALL_POS - offset), rx: -Math.PI / 4, ry: 0,            rz: 0 },
+        { x: 0,             z:  (WALL_POS - offset), rx:  Math.PI / 4, ry: Math.PI,      rz: 0 },
+        { x: -(WALL_POS - offset), z: 0,             rx: 0,             ry: Math.PI / 2,  rz: -Math.PI / 4 },
+        { x:  (WALL_POS - offset), z: 0,             rx: 0,             ry: -Math.PI / 2, rz:  Math.PI / 4 },
     ].forEach(d => {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(WALL_POS * 2, h), wallMat);
-        m.position.set(d.x, FLOOR_Y + h / 2, d.z);
-        m.rotation.y = d.ry;
+        const segs = 48;
+        const geo = new THREE.PlaneGeometry(wallW, h, segs, Math.round(segs * h / wallW));
+        // Déplacement de vertex pour relief irrégulier prononcé
+        const pos = geo.attributes.position;
+        const dispAmp = 0.55;
+        for (let i = 0; i < pos.count; i++) {
+            const lx = pos.getX(i), ly = pos.getY(i);
+            const d1 = (fbm2(lx * 0.25 + 11, ly * 0.25 + 23) - 0.5) * dispAmp;
+            const d2 = (fbm2(lx * 0.7 + 47, ly * 0.7 + 31) - 0.5) * dispAmp * 0.5;
+            const d3 = (fbm2(lx * 1.8 + 91, ly * 1.8 + 63) - 0.5) * dispAmp * 0.15;
+            pos.setZ(i, d1 + d2 + d3);
+        }
+        pos.needsUpdate = true;
+        geo.computeVertexNormals();
+        const m = new THREE.Mesh(geo, wallMat);
+        m.position.set(d.x, FLOOR_Y + halfH, d.z);
+        m.rotation.set(d.rx, d.ry, d.rz);
         m.receiveShadow = true;
         wallsGroup.add(m);
     });
+    // Tiling texture
     if (wallTex) {
-        const rep = Math.max(2, Math.round((WALL_POS * 2) / 3.3));
+        const rep = Math.max(2, Math.round(wallW / 3.3));
         wallTex.repeat.set(rep, Math.max(2, Math.round(h / 3.3)));
+    }
+    if (wallNrm) {
+        const rep = Math.max(2, Math.round(wallW / 3.3));
+        wallNrm.repeat.set(rep, Math.max(2, Math.round(h / 3.3)));
     }
     scene.add(wallsGroup);
 }
@@ -669,8 +748,10 @@ async function loadScene3DConfig() {
                     positionInZone(instanceGroup, obj);
 
                     // Animations GLB — le mixer DOIT être créé sur le clone (pas l'original)
+                    // Sauf si behavior="static" : on bloque l'animation incluse du GLB
+                    const skipAnim = obj.behavior === 'static';
                     const hasAnims = gltf.animations && gltf.animations.length > 0;
-                    if (hasAnims) {
+                    if (hasAnims && !skipAnim) {
                         const mixer = new THREE.AnimationMixer(modelClone);
                         gltf.animations.forEach(clip => {
                             const action = mixer.clipAction(clip);
@@ -678,6 +759,8 @@ async function loadScene3DConfig() {
                         });
                         scene3dMixers.push(mixer);
                         console.log(`[SubSim] ${obj.name} #${i}: ${gltf.animations.length} animation(s) lancée(s), mixer=${scene3dMixers.length}`);
+                    } else if (skipAnim && hasAnims) {
+                        console.log(`[SubSim] ${obj.name} #${i}: animation GLB bloquée (behavior=static)`);
                     } else {
                         console.log(`[SubSim] ${obj.name} #${i}: aucune animation dans le GLB`);
                     }
@@ -1313,6 +1396,8 @@ function updateSceneObjects(dt) {
         }
         const speed = (cfg.speed || 1) * 0.5;          // m/s de base
         const behavior = cfg.behavior || 'neant';
+        // "static" = fixe + pas d'animation GLB
+        if (behavior === 'static') return;
         const turnSpeed = cfg.turn_speed || 0.5;        // 0..1 : rapidité de virage
         const wanderR = cfg.wander_radius || 5;         // rayon d'errance autour du spawn
 
@@ -2078,7 +2163,10 @@ function initActionButtons() {
     document.getElementById('sim-btn-fpv').addEventListener('click', () => setFpv(!isFpvActive));
     document.getElementById('sim-btn-reset').addEventListener('click', resetPose);
     document.getElementById('sim-btn-light').addEventListener('click', function() {
-        this.classList.toggle('active');
+        diveState.led = !diveState.led;
+        this.classList.toggle('active', diveState.led);
+        applyLed();
+        saveSettings();
     });
     document.getElementById('sim-btn-view-34').addEventListener('click', () => setView('34'));
     document.getElementById('sim-btn-view-top').addEventListener('click', () => setView('top'));
@@ -2117,7 +2205,9 @@ function saveSettings() {
     try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify({
             physState: { inertia: physState.inertia, gain: physState.gain, sens: physState.sens, rollSens: physState.rollSens, pitchSens: physState.pitchSens },
-            diveState: { depth: diveState.depth, visibility: diveState.visibility, extent: diveState.extent },
+            diveState: { depth: diveState.depth, visibility: diveState.visibility, extent: diveState.extent,
+                         reliefHeight: diveState.reliefHeight, abyssDepth: diveState.abyssDepth, abyssRadius: diveState.abyssRadius,
+                         led: diveState.led, ledIntensity: diveState.ledIntensity, ledTilt: diveState.ledTilt },
             osdConfig: { horizonVisible: osdConfig.horizonVisible, horizonOpacity: osdConfig.horizonOpacity,
                          horizonDiameter: osdConfig.horizonDiameter }
         }));
@@ -2143,6 +2233,15 @@ function syncSlidersUI() {
     sync('sim-depth',     diveState.depth,     v => v + ' m');
     sync('sim-extent',    diveState.extent,    v => v + ' m');
     sync('sim-visibility', diveState.visibility, v => v + ' m');
+    sync('sim-relief',    diveState.reliefHeight, v => v + ' m');
+    sync('sim-abyss-depth', diveState.abyssDepth, v => v + ' m');
+    sync('sim-abyss-radius', diveState.abyssRadius, v => v + ' %');
+    // LED
+    sync('sim-led-intensity', diveState.ledIntensity, v => v + ' %');
+    sync('sim-led-tilt', diveState.ledTilt, v => v + '°');
+    // Bouton lumière : synchroniser l'état visuel
+    const lightBtn = document.getElementById('sim-btn-light');
+    if (lightBtn) lightBtn.classList.toggle('active', diveState.led);
     // OSD
     sync('sim-osd-horizon-opacity',  osdConfig.horizonOpacity,  v => v + ' %');
     sync('sim-osd-horizon-diameter', osdConfig.horizonDiameter, v => v + ' %');
@@ -2170,18 +2269,24 @@ function bindSliders() {
     bind('sim-sens', 'sens', physState, v => Math.round(parseFloat(v) * 100) + '%');
     bind('sim-roll-sens', 'rollSens', physState, v => Math.round(parseFloat(v) * 100) + '%');
     bind('sim-pitch-sens', 'pitchSens', physState, v => Math.round(parseFloat(v) * 100) + '%');
-    bind('sim-depth', 'depth', diveState, v => v + ' m', () => {
-        FLOOR_Y = -diveState.depth;
-        gridHelper.position.y = FLOOR_Y;
-        shadowGround.position.y = FLOOR_Y;
-        if (diveState.walls) buildWalls();
-        if (diveState.terrain) buildTerrain();
-        applyBasinSize();
-    });
-    bind('sim-extent', 'extent', diveState, v => v + ' m', applyBasinSize);
+    bind('sim-depth', 'depth', diveState, v => v + ' m', () => applyBasinSize());
+    bind('sim-extent', 'extent', diveState, v => v + ' m', () => applyBasinSize());
     bind('sim-visibility', 'visibility', diveState, v => v + ' m', () => {
         scene.fog = new THREE.FogExp2(0x0b1020, 1.7 / diveState.visibility);
     });
+    bind('sim-relief', 'reliefHeight', diveState, v => v + ' m', () => {
+        if (diveState.terrain && terrainMesh) updateTerrainGeometry();
+    });
+    bind('sim-abyss-depth', 'abyssDepth', diveState, v => v + ' m', () => {
+        if (diveState.terrain && terrainMesh) updateTerrainGeometry();
+    });
+    bind('sim-abyss-radius', 'abyssRadius', diveState, v => v + ' %', () => {
+        if (diveState.terrain && terrainMesh) updateTerrainGeometry();
+    });
+
+    // --- Projecteurs LED ---
+    bind('sim-led-intensity', 'ledIntensity', diveState, v => v + ' %', () => applyLed());
+    bind('sim-led-tilt', 'ledTilt', diveState, v => v + '°', () => applyLed());
 
     // --- OSD : Horizon artificiel ---
     document.getElementById('sim-osd-horizon-visible').addEventListener('change', function() {
@@ -2308,6 +2413,90 @@ function updateDepthAmbience() {
     scene.fog.color.copy(_waterCol);
     for (const m of envMats) m.envMapIntensity = f;
     if (gridHelper) gridHelper.material.opacity = Math.max(0.05, f);
+}
+
+// ===========================================================================
+// PROJECTEURS LED (projecteur.glb)
+// ===========================================================================
+
+// Crée le groupe pivot des projecteurs et les 2 SpotLights (gauche / droit).
+function initProjectors() {
+    projGroup = new THREE.Group();
+    modelGroup.add(projGroup);
+    const px = -(MODEL_LENGTH / 2);   // avant visuel du ROV = -X
+    projSpots = [
+        makeProjectorSpot(px, 0.06, +0.09, +0.03),   // pod bâbord
+        makeProjectorSpot(px, 0.06, -0.09, -0.03),   // pod tribord
+    ];
+    applyLed();
+}
+
+// SpotLight de projecteur : blanc bleuté (LED sous-marine), cône 26°, portée 60 m.
+function makeProjectorSpot(x, y, z, zTargetPinch) {
+    const s = new THREE.SpotLight(0xdff2ff, 0, 60, THREE.MathUtils.degToRad(26), 0.45, 1.6);
+    s.castShadow = true;
+    s.shadow.mapSize.set(1024, 1024);
+    s.shadow.bias = -0.0005;
+    s.position.set(x - 0.01, y, z);
+    s.target.position.set(x - 3.0, y - 0.35, zTargetPinch);
+    projGroup.add(s);
+    projGroup.add(s.target);
+    return s;
+}
+
+// Charge projecteur.glb et l'attache au groupe pivot du Tilt.
+function loadProjectorModel() {
+    const loader = new GLTFLoader();
+    loader.load(
+        '/static/models/projecteur.glb',
+        (gltf) => {
+            const proj = gltf.scene;
+            proj.scale.setScalar(rovFitScale);
+            proj.position.copy(rovFitOffset);
+            proj.traverse((o) => {
+                if (o.isMesh) {
+                    o.castShadow = true;
+                    const mats = Array.isArray(o.material) ? o.material : [o.material];
+                    mats.forEach((m) => { if (m) envMats.push(m); });
+                }
+            });
+            projGroup.add(proj);
+            fitSpotsToProjector(proj);
+        },
+        undefined,
+        (err) => {
+            console.warn('projecteur.glb indisponible — faisceaux seuls:', err);
+        }
+    );
+}
+
+// Ajuste les SpotLights aux positions réelles des optiques du GLB.
+function fitSpotsToProjector(proj) {
+    const box = new THREE.Box3().setFromObject(proj);
+    if (box.isEmpty()) return;
+    const cy = (box.min.y + box.max.y) / 2;
+    const zSpan = box.max.z - box.min.z;
+    const front = box.min.x - 0.005;
+    const podZ = Math.max(0.04, zSpan * 0.28);
+    projSpots.forEach((s, i) => {
+        const side = i === 0 ? 1 : -1;
+        s.position.set(front, cy, side * podZ);
+        s.target.position.set(front - 3.0, cy - 0.35, side * podZ * 0.25);
+    });
+}
+
+// Applique l'état LED : intensité des SpotLights + tilt du groupe pivot.
+function applyLed() {
+    const cd = diveState.led ? LED_MAX_INTENSITY * (diveState.ledIntensity / 100) : 0;
+    projSpots.forEach((s) => { s.intensity = cd; });
+    if (projGroup) {
+        projGroup.rotation.z = THREE.MathUtils.degToRad(diveState.ledTilt);
+    }
+    // Griser les sliders quand éteint
+    const iRow = document.getElementById('sim-led-intensity-row');
+    const tRow = document.getElementById('sim-led-tilt-row');
+    if (iRow) iRow.classList.toggle('disabled', !diveState.led);
+    if (tRow) tRow.classList.toggle('disabled', !diveState.led);
 }
 
 function applyFog() {

@@ -13,6 +13,69 @@
     --accent-red: #ff5a6a;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Tooltip ⓘ (même style que scene3d.css) */
+.s3d-info {
+    display: inline-block;
+    position: relative;
+    font-size: 0.65rem;
+    width: 15px;
+    height: 15px;
+    line-height: 15px;
+    text-align: center;
+    border-radius: 50%;
+    background: rgba(53, 208, 186, 0.18);
+    color: #35d0ba;
+    cursor: help;
+    vertical-align: middle;
+    margin-left: 4px;
+    font-style: normal;
+    user-select: none;
+    outline: none;
+}
+.s3d-info:hover, .s3d-info:focus { background: rgba(53, 208, 186, 0.4); color: #fff; }
+.s3d-info::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #162040;
+    color: #c9ddf8;
+    border: 1px solid #35d0ba;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 0.74rem;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: normal;
+    width: max-content;
+    max-width: 220px;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+    z-index: 9999;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.s3d-info::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #35d0ba;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+    z-index: 9999;
+}
+.s3d-info:hover::after, .s3d-info:hover::before,
+.s3d-info:focus::after, .s3d-info:focus::before {
+    opacity: 1;
+    visibility: visible;
+}
 html, body { height: 100%; overflow: hidden; }
 body {
     background: radial-gradient(circle at 50% 30%, #16203c 0%, var(--bg) 70%);
@@ -137,6 +200,9 @@ input[type=range].phys-slider::-moz-range-thumb {
     border-color: var(--accent); color: #0b1020; background: var(--accent);
     box-shadow: 0 0 12px rgba(53,208,186,0.55);
 }
+
+/* Sliders LED désactivés quand lumières éteintes */
+.phys-row.disabled { opacity: 0.35; pointer-events: none; }
 
 /* === MOTEURS (barres de puissance) === */
 .m-group-title { font-size: 11px; color: var(--muted); margin: 8px 0 5px; }

@@ -99,6 +99,19 @@
       "zone": "fond",
       "speed": 1,
       "behavior": "neant"
+    },
+    {
+      "name": "epave",
+      "type": "objet",
+      "model": "epave.glb",
+      "real_size_m": 20,
+      "count": 1,
+      "scale_min": 0.8,
+      "scale_max": 1.2,
+      "kinematic": "fixe",
+      "zone": "fond",
+      "speed": 1,
+      "behavior": "static"
     }
   ],
   "environment": {
@@ -106,36 +119,36 @@
     "reef": {
       "algae": {
         "enabled": true,
-        "density": 0.81,
+        "density": 1,
         "length": 2.4
       },
       "corals": {
         "enabled": true,
-        "density": 71
+        "density": 48
       },
       "fish": {
         "enabled": true,
-        "count": 360,
+        "count": 500,
         "speed": 1.3
       }
     },
     "abyss": {
       "creatures": {
         "enabled": true,
-        "density": 39
+        "density": 5
       },
       "pikes": {
-        "enabled": true
+        "enabled": false
       }
     },
     "terrain": {
       "enabled": true,
-      "height": 1.7
+      "height": 2
     },
     "walls": {
-      "enabled": false,
+      "enabled": true,
       "tiling": 5
     },
-    "compact_zone": 100
+    "compact_zone": 15
   }
 }

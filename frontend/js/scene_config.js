@@ -387,10 +387,11 @@ const SceneConfig = (() => {
             const tdBehav = document.createElement('td');
             tdBehav.appendChild(_el('select', {
                 innerHTML: _buildOptions([
-                    { value: 'fixe',    label: 'Fixe' },
-                    { value: 'nageant', label: 'Nageant' },
-                    { value: 'fuir',    label: 'Fuir' },
-                    { value: 'curieux', label: 'Curieux' }
+                    { value: 'fixe',    label: '📌 Fixe' },
+                    { value: 'static',  label: '⏸️ Static (sans anim)' },
+                    { value: 'nageant', label: '🏊 Nageant' },
+                    { value: 'fuir',    label: '💨 Fuir' },
+                    { value: 'curieux', label: '👀 Curieux' }
                 ], obj.behavior),
                 onChange: (e) => _updateObject(idx, 'behavior', e.target.value)
             }));
