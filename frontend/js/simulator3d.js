@@ -1286,7 +1286,15 @@ function updateSceneObjects(dt) {
 
     scene3dObjects.forEach(obj => {
         const cfg = obj.config;
+        const objType = cfg.type || 'faune';
         let kinematic = cfg.kinematic || 'fixe';
+        // Forcer le comportement cinématique selon le type de modèle
+        if (objType === 'flore') kinematic = 'ancre_ondule';
+        if (objType === 'objet') kinematic = 'fixe';
+        // Auto-détection : si kinematic=fixe mais behavior implique du mouvement, auto-upgrade
+        if (kinematic === 'fixe' && (cfg.behavior === 'nageant' || cfg.behavior === 'fuir' || cfg.behavior === 'curieux')) {
+            kinematic = 'nageant';
+        }
         const speed = (cfg.speed || 1) * 0.5;          // m/s de base
         const behavior = cfg.behavior || 'neant';
         const turnSpeed = cfg.turn_speed || 0.5;        // 0..1 : rapidité de virage

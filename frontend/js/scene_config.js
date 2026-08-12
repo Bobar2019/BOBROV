@@ -14,7 +14,7 @@ const SceneConfig = (() => {
 
     const DEFAULT_OBJECT = {
         name: "Nouvel objet",
-        type: "decor",
+        type: "faune",
         model: "",
         real_size_m: 1.0,
         count: 1,
@@ -304,7 +304,27 @@ const SceneConfig = (() => {
             }));
             tr.appendChild(tdName);
 
-            // ── Colonne 3 : Modèle GLB ──
+            // ── Colonne 3 : Type (faune / flore / objet) ──
+            const tdType = document.createElement('td');
+            tdType.appendChild(_el('select', {
+                innerHTML: _buildOptions([
+                    { value: 'faune',  label: '🐠 Faune' },
+                    { value: 'flore',  label: '🌿 Flore' },
+                    { value: 'objet',  label: '📦 Objet' }
+                ], obj.type),
+                onChange: (e) => {
+                    _updateObject(idx, 'type', e.target.value);
+                    // Auto-config pour la flore : fixe au sol avec ondulation
+                    if (e.target.value === 'flore') {
+                        _updateObject(idx, 'kinematic', 'ancre_ondule');
+                        _updateObject(idx, 'zone', 'fond');
+                        _renderObjects();
+                    }
+                }
+            }));
+            tr.appendChild(tdType);
+
+            // ── Colonne 4 : Modèle GLB ──
             const tdModel = document.createElement('td');
             const modelOpts = '<option value="">— Aucun —</option>' +
                 _models.map(m => {
@@ -326,7 +346,7 @@ const SceneConfig = (() => {
             }));
             tr.appendChild(tdModel);
 
-            // ── Colonne 4 : Taille (m) ──
+            // ── Colonne 5 : Taille (m) ──
             const tdSize = document.createElement('td');
             tdSize.appendChild(_el('input', {
                 type: 'number', step: '0.01', min: '0.01', value: obj.real_size_m,
@@ -334,7 +354,7 @@ const SceneConfig = (() => {
             }));
             tr.appendChild(tdSize);
 
-            // ── Colonne 5 : Quantité ──
+            // ── Colonne 6 : Quantité ──
             const tdQty = document.createElement('td');
             tdQty.appendChild(_el('input', {
                 type: 'number', min: '1', step: '1', value: obj.count,
@@ -342,7 +362,7 @@ const SceneConfig = (() => {
             }));
             tr.appendChild(tdQty);
 
-            // ── Colonne 6 : Zone ──
+            // ── Colonne 7 : Zone ──
             const tdZone = document.createElement('td');
             tdZone.appendChild(_el('select', {
                 innerHTML: _buildOptions([
@@ -355,7 +375,15 @@ const SceneConfig = (() => {
             }));
             tr.appendChild(tdZone);
 
-            // ── Colonne 7 : Comportement ──
+            // ── Colonne 8 : Vitesse ──
+            const tdSpeed = document.createElement('td');
+            tdSpeed.appendChild(_el('input', {
+                type: 'number', step: '0.1', min: '0', value: obj.speed != null ? obj.speed : 1.0,
+                onInput: (e) => _updateObject(idx, 'speed', parseFloat(e.target.value) || 0)
+            }));
+            tr.appendChild(tdSpeed);
+
+            // ── Colonne 9 : Comportement ──
             const tdBehav = document.createElement('td');
             tdBehav.appendChild(_el('select', {
                 innerHTML: _buildOptions([
@@ -368,7 +396,7 @@ const SceneConfig = (() => {
             }));
             tr.appendChild(tdBehav);
 
-            // ── Colonne 8 : Supprimer ──
+            // ── Colonne 10 : Supprimer ──
             const tdDel = document.createElement('td');
             tdDel.appendChild(_el('button', {
                 className: 's3d-del-btn',
