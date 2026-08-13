@@ -398,23 +398,49 @@ function fbm2(x, z) {
 }
 
 // Hauteur du relief : Blue Hole (plateau corallien + fosse abyssale)
+// Le plateau reste à une profondeur fixe (biologie récifale ~20-25 m).
+// La fosse descend TOUJOURS jusqu'à FLOOR_Y quelle que soit la profondeur du bassin.
 function terrainHeightAt(x, z) {
     // === Blue Hole : plateau corallien + fosse abyssale centrale ===
     const reliefAmp = diveState.reliefHeight;  // amplitude du relief (stalactites/stalagmites)
-    const abyssBelow = diveState.abyssDepth;   // profondeur de la fosse sous le plateau
+    const abyssBelow = diveState.abyssDepth;   // profondeur supplémentaire de la fosse sous le plateau
     const pitPct = diveState.abyssRadius / 100; // rayon fosse en % de WALL_POS
+
+    // Plateau à profondeur fixe (écosystème récifal : lumière + chaleur)
     const plateauBase = Math.max(FLOOR_Y, -(REEF_DEPTH + reliefAmp));
-    const coral = Math.pow(fbm2(x * 0.35 + 7.3, z * 0.35 + 3.1), 1.6) * (diveState.terrain ? reliefAmp * 0.18 : 0)
+
+    // Relief corallien (bruit fractal)
+    const coral = Math.pow(fbm2(x * 0.35 + 7.3, z * 0.35 + 3.1), 1.6)
+                    * (diveState.terrain ? reliefAmp * 0.18 : 0)
                 + fbm2(x * 1.1 + 19.7, z * 1.1 + 5.9) * reliefAmp * 0.16;
     const plateauY = Math.min(plateauBase + (diveState.terrain ? coral : 0), -1.0);
+
+    // Bassin trop peu profond pour avoir une fosse : tout est plateau
     if (FLOOR_Y >= -(REEF_DEPTH + reliefAmp) - 1) return plateauY;
+
+    // Fosse abyssale centrée
     const R = WALL_POS * pitPct;
     const rim = (fbm2(x * 0.05 + 31.4, z * 0.05 + 12.8) - 0.5) * R * 0.35;
     const r = Math.hypot(x, z) + rim;
     if (r >= R) return plateauY;
+
+    // Transition douce plateau → fosse (smoothstep cubique)
     const t = THREE.MathUtils.smoothstep(r, R * 0.45, R);
     const s = t * t * (3 - 2 * t);
-    const abyssY = Math.max(FLOOR_Y, plateauY - abyssBelow) + fbm2(x * 0.06 + 3.7, z * 0.06 + 8.2) * 3.0;
+
+    // Fond de la fosse : le plus profond possible entre le paramètre
+    // abyssDepth et le fond réel du bassin (FLOOR_Y).
+    // Pour les bassins peu profonds : la fosse est limitée par FLOOR_Y.
+    // Pour les bassins profonds : la fosse atteint FLOOR_Y.
+    //   - Bassin 30 m  : max(min(-39,-30), -30) = max(-30,-30) = -30 ✓
+    //   - Bassin 115 m : max(min(-39,-115), -115) = max(-115,-115) = -115 ✓
+    //   - Bassin 50 m  : max(min(-39,-50), -50) = max(-50,-50) = -50 ✓
+    const floorVariation = fbm2(x * 0.06 + 3.7, z * 0.06 + 8.2) * 3.0;
+    const abyssY = Math.max(
+        Math.min(plateauY - abyssBelow, FLOOR_Y) + floorVariation,
+        FLOOR_Y
+    );
+
     return abyssY + (plateauY - abyssY) * s;
 }
 
@@ -733,7 +759,7 @@ async function loadScene3DConfig() {
                 const baseScale = (obj.real_size_m || 0.2) / maxDim;
                 console.log(`[SubSim] ${obj.model}: meshBbox=(${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)}) maxDim=${maxDim.toFixed(4)} baseScale=${baseScale.toFixed(3)} → ${(baseScale * maxDim).toFixed(3)}m`);
                 const count = obj.count || 1;
-                const validBehaviors = ['fuir', 'curieux', 'neant', 'static'];
+                const validBehaviors = ['fuir', 'curieux', 'neant', 'static', 'nageant'];
                 if (!validBehaviors.includes(obj.behavior)) {
                     console.warn(`[SubSim] ⚠️  "${obj.name}": behavior="${obj.behavior}" inconnu (valides: ${validBehaviors.join(', ')}), fallback neant`);
                 }
@@ -748,6 +774,62 @@ async function loadScene3DConfig() {
                     const cloneBox = meshBoundingBox(modelClone);
                     const cloneCenter = cloneBox.getCenter(new THREE.Vector3());
                     modelClone.position.sub(cloneCenter);
+                    // ── Correction heading : aligner le modèle face +Z ──
+                    // Détection par normales de surface : la normale du vertex
+                    // le plus en avant pointe dans la direction de déplacement.
+                    // Plus fiable que le comptage de vertices (qui échoue sur
+                    // les poissons à cause du volume de la nageoire caudale).
+                    modelClone.updateMatrixWorld(true);
+                    const wm = modelClone.matrixWorld;
+                    const _nmat = new THREE.Matrix3().getNormalMatrix(wm);
+                    const _v = new THREE.Vector3();
+                    const _n = new THREE.Vector3();
+                    let maxZ = -Infinity, minZ = Infinity;
+                    let normAtMaxZ = 0, normAtMinZ = 0;
+                    let vPx = 0, vNx = 0;
+                    modelClone.traverse(child => {
+                        if ((child.isMesh || child.isSkinnedMesh) && child.geometry) {
+                            const pos = child.geometry.attributes.position;
+                            const norm = child.geometry.attributes.normal;
+                            if (!pos) return;
+                            for (let vi = 0; vi < pos.count; vi++) {
+                                _v.fromBufferAttribute(pos, vi).applyMatrix4(wm);
+                                if (_v.x > 0.01) vPx++; else if (_v.x < -0.01) vNx++;
+                                if (norm) {
+                                    _n.fromBufferAttribute(norm, vi).applyMatrix3(_nmat).normalize();
+                                    if (_v.z > maxZ) { maxZ = _v.z; normAtMaxZ = _n.z; }
+                                    if (_v.z < minZ) { minZ = _v.z; normAtMinZ = _n.z; }
+                                }
+                            }
+                        }
+                    });
+                    const cloneSize = cloneBox.getSize(new THREE.Vector3());
+                    let headingOffset = 0;
+                    if (cloneSize.x > cloneSize.z * 1.2) {
+                        // Modèle allongé sur X → tourne de ±90° pour aligner sur Z
+                        headingOffset = (vPx > vNx) ? -Math.PI / 2 : Math.PI / 2;
+                    } else if (cloneSize.z > cloneSize.x * 1.2) {
+                        // Modèle allongé sur Z → détection par normales
+                        // La normale au vertex le plus en avant (maxZ) pointe vers l'avant.
+                        // Si normAtMaxZ < 0 → le modèle fait face à -Z → rotation 180°
+                        if (normAtMaxZ < -0.1) {
+                            headingOffset = Math.PI;
+                        } else if (normAtMinZ > 0.1) {
+                            headingOffset = Math.PI; // cohérence : arrière pointe vers l'avant
+                        } else {
+                            headingOffset = 0; // normale avant pointe +Z → OK
+                        }
+                    }
+                    // Fallback : normales aux extrêmes Z
+                    if (headingOffset === 0 && (normAtMaxZ < -0.1 || normAtMinZ > 0.1)) {
+                        headingOffset = Math.PI;
+                    }
+                    if (headingOffset !== 0) {
+                        modelClone.rotation.y = headingOffset;
+                        console.log(`[SubSim] ${obj.name}: heading corrigé de ${(headingOffset * 180 / Math.PI).toFixed(0)}° (normMaxZ=${normAtMaxZ.toFixed(2)}, normMinZ=${normAtMinZ.toFixed(2)}, size x=${cloneSize.x.toFixed(1)} z=${cloneSize.z.toFixed(1)})`);
+                    } else {
+                        console.log(`[SubSim] ${obj.name}: heading OK (normMaxZ=${normAtMaxZ.toFixed(2)}, normMinZ=${normAtMinZ.toFixed(2)})`);
+                    }
                     instanceGroup.add(modelClone);
                     positionInZone(instanceGroup, obj);
 
@@ -768,23 +850,70 @@ async function loadScene3DConfig() {
                     } else {
                         console.log(`[SubSim] ${obj.name} #${i}: aucune animation dans le GLB`);
                     }
-                    scene3dObjects.push({
+                    // Facteur d'échelle cinématique : les gros animaux ont
+                    // des trajectoires plus larges et des mouvements plus lents
+                    // cbrt pour un effet modéré : guppy=1, thon=1, esturgeon≈1.3, baleine≈2.4
+                    const realSize = obj.real_size_m || 0.5;
+                    const sizeCat = Math.min(2.5, Math.max(1, Math.cbrt(realSize / 0.5)));
+
+                    // Préparer l'objet à pousser dans scene3dObjects
+                    // Rayon de trajectoire adapté à la taille du bassin
+                    const isMamifere = obj.type === 'mamifere';
+                    const basinHalf = compactHalfW();
+                    const maxPathR = basinHalf * 0.65; // le huit ne dépasse pas 65% du bassin
+                    const pathRx = isMamifere
+                        ? Math.min(15 + Math.random() * 15, maxPathR)    // mammifère : jusqu'à 30m, clamp bassin
+                        : Math.min((5 + Math.random() * 7) * sizeCat, maxPathR);
+                    const pathRz = isMamifere
+                        ? Math.min(15 + Math.random() * 15, maxPathR)
+                        : Math.min((5 + Math.random() * 7) * sizeCat, maxPathR);
+                    const objData = {
                         config: obj, group: instanceGroup,
                         velocity: new THREE.Vector3(),
                         targetYaw: Math.random() * Math.PI * 2,
                         changeTimer: Math.random() * 5,
                         baseY: instanceGroup.position.y,
-                        // Paramètres trajectoire en huit (∞)
+                        sizeCat: sizeCat,  // mémorisé pour updateSceneObjects
+                        // Paramètres trajectoire en huit (∞) — proportionnels à la taille
                         path8: {
                             cx: instanceGroup.position.x,
                             cz: instanceGroup.position.z,
-                            rx: 3 + Math.random() * 5,       // rayon X (3-8m)
-                            rz: 3 + Math.random() * 5,       // rayon Z (3-8m)
+                            rx: pathRx,
+                            rz: pathRz,
                             phase: Math.random() * Math.PI * 2,
                             dir: Math.random() > 0.5 ? 1 : -1,
-                            yAmp: 0.2 + Math.random() * 0.4, // amplitude verticale
+                            yAmp: (0.2 + Math.random() * 0.4) * sizeCat,    // amplitude verticale adaptée
                         },
-                    });
+                    };
+                    // ── Mammifère : machine à états surface/plongeon/descente/profondeur/remontée ──
+                    if (obj.type === 'mamifere') {
+                        const midDepthY = FLOOR_Y * 0.5;
+                        // Marge plancher : empêche le corps (longueur ~real_size_m) de traverser le sol
+                        // quand le mammifère est en pitch. Tient compte de l'extension verticale
+                        // du corps : demi-longueur × sin(pitch_max) ≈ demi-longueur × 0.89
+                        const bodyHalfLen = (obj.real_size_m || 5) * 0.5 * (obj.scale_max || 1.2);
+                        const bodyMargin = Math.max(5, bodyHalfLen * 0.9 + 2);
+                        // Spawner près de la surface pour que le cycle démarre correctement
+                        const spawnY = CEIL_Y - 5;
+                        instanceGroup.position.y = spawnY;
+                        objData.baseY = spawnY;
+                        objData.path8.cy = spawnY;
+                        objData.mammal = {
+                            state: 'surface',
+                            timer: 3 + Math.random() * 5,  // première remontée rapide
+                            targetY: CEIL_Y - 4,
+                            pitch: 0,
+                            pitchTarget: 0,
+                            surfDur: 8 + Math.random() * 12,
+                            profDur: 15 + Math.random() * 25,
+                            diveSpeed: 1.5,
+                            bodyMargin,              // conservé pour recalcul dynamique
+                            floorY: FLOOR_Y + bodyMargin,  // plancher sécurisé (recalculé chaque frame)
+                            origRx: objData.path8.rx,
+                            origRz: objData.path8.rz,
+                        };
+                    }
+                    scene3dObjects.push(objData);
                     scene.add(instanceGroup);
                 }
             } catch (e) { console.warn(`[SubSim] ❌ Objet non chargé: ${obj.model}`, e); }
@@ -1357,7 +1486,7 @@ const SPAWN_GUARD_RADIUS = 5.0;  // mètres
 
 function positionInZone(group, obj) {
     const zone = obj.zone || 'pleine_eau';
-    const halfW = compactHalfW() * 0.8;
+    const halfW = compactHalfW() * 0.92;  // zone de spawn très large pour éparpiller
     // --- Position X/Z avec garde anti-chevauchement ROV ---
     let x, z;
     for (let attempt = 0; attempt < 30; attempt++) {
@@ -1366,19 +1495,21 @@ function positionInZone(group, obj) {
         if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
     }
     // --- Altitude Y selon la zone ---
+    // Marge sous la surface : empêche les modèles de dépasser CEIL_Y.
+    // 1.5 m suffit : la plupart des modèles GLB sont centrés et les grands
+    // animaux (baleine) ont besoin de remonter près de la surface.
+    const SURF_MARGIN = 1.5;
     let y;
     switch (zone) {
         case 'surface':
-            // Juste sous la surface : -1 à -4 m
-            y = CEIL_Y - 1 - Math.random() * 3;
+            // Juste sous la surface : -2 à -5 m
+            y = CEIL_Y - 2 - Math.random() * 3;
             break;
         case 'fond':
             // Proche du sol : terrain + 0.3 à terrain + 3 m
-            // Utilise la hauteur réelle du terrain (fosse abyssale incluse)
             {
                 const floorY = terrainMeshHeightAt(x, z);
                 if (obj.type === 'flore') {
-                    // Flore : ancrée directement au sol
                     y = floorY + 0.05;
                 } else {
                     y = floorY + 0.3 + Math.random() * 2.7;
@@ -1386,12 +1517,25 @@ function positionInZone(group, obj) {
             }
             break;
         case 'pleine_eau':
-            // Colonne d'eau complète : de la surface (-1m) au fond (+ 10%)
-            y = (FLOOR_Y * 0.9) + Math.random() * Math.abs(FLOOR_Y * 0.85);
+            // Colonne d'eau : biaisé vers les faibles profondeurs (lumière + visibilité)
+            // Distribution exponentielle : ~50% dans les 10 premiers mètres,
+            // le reste réparti dans la colonne d'eau profonde.
+            {
+                const depth = -FLOOR_Y;
+                const shallow = Math.min(depth * 0.35, 20); // zone lumineuse (max 20 m)
+                const deep = depth - 3;
+                const r = Math.random();
+                const biased = r * r; // courbe quadratique : plus de valeurs faibles
+                y = -(shallow + biased * (deep - shallow));
+            }
             break;
         default:
-            // multi-couches / inconnu : répartition uniforme
-            y = FLOOR_Y * 0.15 + Math.random() * Math.abs(FLOOR_Y) * 0.7;
+            // multi-couches / inconnu : répartition uniforme sous la surface
+            {
+                const yMin = FLOOR_Y + 1;
+                const yMax = CEIL_Y - SURF_MARGIN;
+                y = yMin + Math.random() * (yMax - yMin);
+            }
     }
     group.position.set(x, y, z);
     group.rotation.y = Math.random() * Math.PI * 2;
@@ -1414,11 +1558,15 @@ function updateSceneObjects(dt) {
         // Forcer le comportement cinématique selon le type de modèle
         if (objType === 'flore') kinematic = 'ancre_ondule';
         if (objType === 'objet') kinematic = 'fixe';
+        if (objType === 'mamifere') kinematic = 'nageant';
         // Auto-détection : si kinematic=fixe mais behavior implique du mouvement, auto-upgrade
         if (kinematic === 'fixe' && (cfg.behavior === 'nageant' || cfg.behavior === 'fuir' || cfg.behavior === 'curieux')) {
             kinematic = 'nageant';
         }
-        const speed = (cfg.speed || 1) * 0.5;          // m/s de base
+        // Facteur d'échelle cinématique (mémorisé à la création, fallback 1)
+        const sizeCat = obj.sizeCat || 1;
+        // Vitesse de base : les gros animaux sont un peu plus lents (÷∜sizeCat)
+        const speed = ((cfg.speed || 1) * 0.5) / Math.pow(sizeCat, 0.25);
         const behavior = cfg.behavior || 'neant';
         // "static" = fixe + pas d'animation GLB
         if (behavior === 'static') return;
@@ -1427,12 +1575,15 @@ function updateSceneObjects(dt) {
 
         if (kinematic === 'fixe') return;
 
-        // --- Comportement IA à l'approche du ROV (seuil 8 m) ---
+        // --- Comportement IA à l'approche du ROV (seuil proportionnel à la taille) ---
+        // Les mammifères détectent le ROV de beaucoup plus loin (×3)
+        const isMamifere = obj.mammal != null;
+        const iaThreshold = isMamifere ? 24 * sizeCat : 8 * sizeCat;
         const dist = obj.group.position.distanceTo(rovPos);
         let currentSpeed = speed;
         let iaOverride = false;  // true = l'IA force la direction
 
-        if (dist < 8) {
+        if (dist < iaThreshold) {
             if (behavior === 'fuir') {
                 // Fuite : ×3 vitesse + réorientation immédiate à l'opposé
                 currentSpeed = speed * 3;
@@ -1440,67 +1591,318 @@ function updateSceneObjects(dt) {
                 obj.targetYaw = Math.atan2(away.x, away.z);
                 iaOverride = true;
             } else if (behavior === 'curieux') {
-                // Curieux : s'oriente vers le ROV, vitesse normale
+                // Curieux : s'oriente vers le ROV, vitesse ×1.3 (approche douce)
+                currentSpeed = speed * 1.3;
                 const toward = rovPos.clone().sub(obj.group.position).normalize();
                 obj.targetYaw = Math.atan2(toward.x, toward.z);
                 iaOverride = true;
             }
-            // 'neant' : comportement normal inchangé
+            // 'neant' / 'nageant' : comportement normal inchangé
         }
 
         // --- Mode cinématique : nageant (trajectoire en huit ∞) ---
         if (kinematic === 'nageant') {
             const p = obj.path8;
-            // Avancer la phase sur la courbe
-            p.phase += currentSpeed * dt * 0.3 * p.dir;
 
-            // --- Comportement IA : override la trajectoire si proche du ROV ---
-            if (iaOverride) {
-                // Déplacement direct vers la cible (fuir/curieux)
-                const targetQ = new THREE.Quaternion().setFromAxisAngle(
-                    new THREE.Vector3(0, 1, 0), obj.targetYaw
-                );
-                const slerpFactor = Math.min(0.12, turnSpeed * 0.08 * dt * 60);
-                obj.group.quaternion.slerp(targetQ, slerpFactor);
-                const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(obj.group.quaternion);
-                obj.group.position.addScaledVector(forward, currentSpeed * dt);
-                // Recentrer le huit sur la nouvelle position
-                p.cx = obj.group.position.x;
-                p.cz = obj.group.position.z;
+            // ═══════════════════════════════════════════════════════════════
+            //  MAMMIFÈRE — cycle surface/plongeon/descente/profondeur/remontée
+            // ═══════════════════════════════════════════════════════════════
+            if (obj.mammal) {
+                const m = obj.mammal;
+                m.timer -= dt;
+                // Recalcul dynamique du plancher sécurisé (le slider profondeur peut changer FLOOR_Y)
+                m.floorY = FLOOR_Y + m.bodyMargin;
+                // Recalcul dynamique du rayon du huit (s'adapte au slider zone compacte)
+                const dynMaxR = compactHalfW() * 0.65;
+                p.rx = Math.min(m.origRx, dynMaxR);
+                p.rz = Math.min(m.origRz, dynMaxR);
+
+                if (iaOverride) {
+                    // ── IA override : déplacement direct vers la cible (fuir/curieux) ──
+                    // Mettre à jour rotation.y (pas le quaternion) car le code
+                    // ci-dessous reconstruit le quaternion depuis rotation.y + pitch.
+                    const lerpF = Math.min(0.12 / sizeCat, turnSpeed * 0.08 / sizeCat * dt * 60);
+                    let diff = obj.targetYaw - obj.group.rotation.y;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    obj.group.rotation.y += diff * lerpF;
+                    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(
+                        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), obj.group.rotation.y)
+                    );
+                    obj.group.position.addScaledVector(forward, currentSpeed * dt);
+                    p.cx = obj.group.position.x;
+                    p.cz = obj.group.position.z;
+                    // Reset pitch en mode IA
+                    m.pitch = THREE.MathUtils.lerp(m.pitch, 0, Math.min(1, dt * 2));
+                    // Rotation : yaw (rotation.y) + pitch (axe local X)
+                    {
+                        const yawQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), obj.group.rotation.y);
+                        const pitchQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), m.pitch);
+                        obj.group.quaternion.copy(yawQ).multiply(pitchQ);
+                    }
+                    // Synchroniser l'état mammifère avec la profondeur actuelle
+                    if (obj.group.position.y > CEIL_Y - 6) {
+                        if (m.state !== 'surface' && m.state !== 'plongeon') {
+                            m.state = 'surface';
+                            m.timer = m.surfDur;
+                        }
+                    } else {
+                        if (m.state !== 'profondeur' && m.state !== 'descente') {
+                            m.state = 'profondeur';
+                            m.timer = m.profDur;
+                        }
+                    }
+                } else {
+                    // ── Machine à états mammifère ──
+                    switch (m.state) {
+
+                        case 'surface':
+                            // Remonte d'abord à la surface, puis nage tranquille
+                            m.pitchTarget = 0;
+                            if (obj.group.position.y < CEIL_Y - 6) {
+                                // Encore loin de la surface : remonter activement
+                                obj.group.position.y += m.diveSpeed * dt;
+                                // Geler le timer pendant la remontée
+                                m.timer = Math.max(m.timer, m.surfDur * 0.5);
+                            } else {
+                                // Près de la surface : huit + oscillation douce
+                                p.phase += currentSpeed * dt * (1.5 / sizeCat) * p.dir;
+                                const t8 = p.phase;
+                                const sinT = Math.sin(t8), cosT = Math.cos(t8);
+                                const denom = 1 + sinT * sinT;
+                                const newX = p.cx + p.rx * cosT / denom;
+                                const newZ = p.cz + p.rz * sinT * cosT / denom;
+                                // Orientation : suivre la tangente du huit
+                                const dx = newX - obj.group.position.x;
+                                const dz = newZ - obj.group.position.z;
+                                if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {
+                                    const tangentYaw = Math.atan2(dx, dz);
+                                    const lerpF = Math.min(0.15 / sizeCat, turnSpeed * 0.1 / sizeCat * dt * 60);
+                                    // Mettre à jour rotation.y (pas le quaternion) car
+                                    // le code post-switch reconstruit le quaternion depuis rotation.y
+                                    let diff = tangentYaw - obj.group.rotation.y;
+                                    while (diff > Math.PI) diff -= Math.PI * 2;
+                                    while (diff < -Math.PI) diff += Math.PI * 2;
+                                    obj.group.rotation.y += diff * lerpF;
+                                }
+                                obj.group.position.x = newX;
+                                obj.group.position.z = newZ;
+                                obj.group.position.y = (CEIL_Y - 4) + Math.sin(t8 * 2) * 0.3;
+                                // Transition : timer écoulé → plongeon
+                                if (m.timer <= 0) {
+                                    m.state = 'plongeon';
+                                    m.timer = 3 + Math.random() * 2;
+                                    m.pitchTarget = -0.8 - Math.random() * 0.3;  // -46° à -63°
+                                }
+                            }
+                            break;
+
+                        case 'plongeon':
+                            // Bascule nez vers le bas, la queue sort de l'eau !
+                            m.pitch = THREE.MathUtils.lerp(m.pitch, m.pitchTarget, Math.min(1, dt * 0.6));
+                            // Léger mouvement vers l'avant
+                            {
+                                const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(
+                                    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), obj.group.rotation.y)
+                                );
+                                obj.group.position.addScaledVector(fwd, speed * 0.2 * dt);
+                            }
+                            // Maintenir Y près de la surface — le pitch fait sortir la queue
+                            obj.group.position.y = THREE.MathUtils.lerp(obj.group.position.y, CEIL_Y - 3, Math.min(1, dt * 0.5));
+                            if (m.timer <= 0) {
+                                m.state = 'descente';
+                                // Cible entre 30% et 80% de la plage utile [CEIL_Y → floorY]
+                                // Toujours atteignable même si FLOOR_Y change
+                                const usableRange = m.floorY - CEIL_Y;  // négatif
+                                m.targetY = CEIL_Y + usableRange * (0.3 + Math.random() * 0.5);
+                            }
+                            break;
+
+                        case 'descente':
+                            // Descend vers la profondeur cible, gueule vers le bas
+                            {
+                                const diff = m.targetY - obj.group.position.y;
+                                // Si le plancher est atteint → transition immédiate vers profondeur
+                                if (obj.group.position.y <= m.floorY + 0.3) {
+                                    m.pitchTarget = 0;
+                                    m.state = 'profondeur';
+                                    m.timer = m.profDur;
+                                    p.cx = obj.group.position.x;
+                                    p.cz = obj.group.position.z;
+                                    p.phase = Math.random() * Math.PI * 2;
+                                    obj.baseY = obj.group.position.y;
+                                } else if (Math.abs(diff) > 0.5) {
+                                    obj.group.position.y += Math.sign(diff) * m.diveSpeed * dt;
+                                    // Pitch proportionnel à la distance restante
+                                    const steepness = Math.min(1, Math.abs(diff) / 10);
+                                    m.pitchTarget = -0.15 - steepness * 0.55;  // -0.15° à -0.70°
+                                } else {
+                                    m.pitchTarget = 0;
+                                    m.state = 'profondeur';
+                                    m.timer = m.profDur;
+                                    // Nouveau centre de huit à la profondeur atteinte
+                                    p.cx = obj.group.position.x;
+                                    p.cz = obj.group.position.z;
+                                    p.phase = Math.random() * Math.PI * 2;
+                                    obj.baseY = obj.group.position.y;
+                                }
+                                // Avancer pendant la descente
+                                const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(
+                                    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), obj.group.rotation.y)
+                                );
+                                obj.group.position.addScaledVector(fwd, speed * 0.3 * dt);
+                            }
+                            m.pitch = THREE.MathUtils.lerp(m.pitch, m.pitchTarget, Math.min(1, dt * 1.5));
+                            break;
+
+                        case 'profondeur':
+                            // Nage en huit à la profondeur atteinte (niveau aléatoire)
+                            m.pitchTarget = 0;
+                            p.phase += currentSpeed * dt * (1.5 / sizeCat) * p.dir;
+                            {
+                                const t8 = p.phase;
+                                const sinT = Math.sin(t8), cosT = Math.cos(t8);
+                                const denom = 1 + sinT * sinT;
+                                const newX = p.cx + p.rx * cosT / denom;
+                                const newZ = p.cz + p.rz * sinT * cosT / denom;
+                                // Orientation : suivre la tangente du huit
+                                const dx = newX - obj.group.position.x;
+                                const dz = newZ - obj.group.position.z;
+                                if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {
+                                    const tangentYaw = Math.atan2(dx, dz);
+                                    const lerpF = Math.min(0.15 / sizeCat, turnSpeed * 0.1 / sizeCat * dt * 60);
+                                    let diff = tangentYaw - obj.group.rotation.y;
+                                    while (diff > Math.PI) diff -= Math.PI * 2;
+                                    while (diff < -Math.PI) diff += Math.PI * 2;
+                                    obj.group.rotation.y += diff * lerpF;
+                                }
+                                obj.group.position.x = newX;
+                                obj.group.position.z = newZ;
+                                const bY = obj.baseY != null ? obj.baseY : obj.group.position.y;
+                                obj.group.position.y = bY + Math.sin(t8 * 2) * p.yAmp;
+                                obj.baseY = bY;
+                            }
+                            if (m.timer <= 0) {
+                                m.state = 'remontee';
+                                // Cible aléatoire : 60% surface, 40% mi-profondeur (dans plage utile)
+                                const uRange = m.floorY - CEIL_Y;  // négatif
+                                if (Math.random() < 0.6) {
+                                    m.targetY = CEIL_Y + uRange * (0.05 + Math.random() * 0.15);  // haut
+                                } else {
+                                    m.targetY = CEIL_Y + uRange * (0.25 + Math.random() * 0.35);  // mi-profondeur
+                                }
+                            }
+                            break;
+
+                        case 'remontee':
+                            // Remonte, gueule vers le haut
+                            {
+                                const diff = m.targetY - obj.group.position.y;
+                                if (Math.abs(diff) > 0.5) {
+                                    obj.group.position.y += Math.sign(diff) * m.diveSpeed * dt;
+                                    // Pitch positif = gueule en haut, proportionnel
+                                    const steepness = Math.min(1, Math.abs(diff) / 10);
+                                    m.pitchTarget = 0.1 + steepness * 0.5;  // +0.10° à +0.60°
+                                } else {
+                                    m.pitchTarget = 0;
+                                    m.state = 'surface';
+                                    m.timer = m.surfDur;
+                                    // Nouveau centre de huit
+                                    p.cx = obj.group.position.x;
+                                    p.cz = obj.group.position.z;
+                                    p.phase = Math.random() * Math.PI * 2;
+                                    obj.baseY = obj.group.position.y;
+                                }
+                                // Avancer pendant la remontée
+                                const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(
+                                    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), obj.group.rotation.y)
+                                );
+                                obj.group.position.addScaledVector(fwd, speed * 0.3 * dt);
+                            }
+                            m.pitch = THREE.MathUtils.lerp(m.pitch, m.pitchTarget, Math.min(1, dt * 1.5));
+                            break;
+                    }
+
+                    // Orientation yaw + pitch : quaternion composé
+                    // yawQ = rotation globale Y, pitchQ = rotation locale X (tangage)
+                    // multiply applique pitch APRÈS yaw → tangage correct quelle que soit la direction
+                    {
+                        const yawAngle = obj.group.rotation.y;
+                        const yawQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawAngle);
+                        const pitchQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), m.pitch);
+                        obj.group.quaternion.copy(yawQ).multiply(pitchQ);
+                    }
+                }
+
+                // Limites du bassin (mammifères : zone plus large)
+                clampToBasin(obj.group.position, obj.config.zone);
+                // Sécurité plancher mammifère : empêche le corps de traverser le sol
+                if (obj.group.position.y < m.floorY) {
+                    obj.group.position.y = m.floorY;
+                }
+                // Clamp du centre du huit : empêche de sortir du bassin
+                // sans attirer vers (0,0) — sinon tous les poissons convergent
+                // vers le centre (effet siphon autour de la fosse abyssale).
+                const lim = compactHalfW() * 0.85;
+                p.cx = THREE.MathUtils.clamp(p.cx, -lim, lim);
+                p.cz = THREE.MathUtils.clamp(p.cz, -lim, lim);
+
+            // ═════════════════════════════════════════════════════════════
+            //  NAGEANT CLASSIQUE (poissons normaux, sans cycle mammifère)
+            // ═════════════════════════════════════════════════════════════
             } else {
-                // --- Trajectoire en huit (lemniscate) ---
-                const t8 = p.phase;
-                const sinT = Math.sin(t8), cosT = Math.cos(t8);
-                const denom = 1 + sinT * sinT;
-                // Position sur la lemniscate
-                const newX = p.cx + p.rx * cosT / denom;
-                const newZ = p.cz + p.rz * sinT * cosT / denom;
-                // Tangente = direction naturelle
-                const dx = newX - obj.group.position.x;
-                const dz = newZ - obj.group.position.z;
-                const tangentYaw = Math.atan2(dx, dz);
-                // Orientation fluide (slerp) le long de la tangente
-                const slerpFactor = Math.min(0.18, turnSpeed * 0.12 * dt * 60);
-                const targetQ = new THREE.Quaternion().setFromAxisAngle(
-                    new THREE.Vector3(0, 1, 0), tangentYaw
-                );
-                obj.group.quaternion.slerp(targetQ, slerpFactor);
-                // Appliquer la position
-                obj.group.position.x = newX;
-                obj.group.position.z = newZ;
-                // Léger mouvement vertical sinusoïdal
-                const baseY = obj.baseY != null ? obj.baseY : obj.group.position.y;
-                obj.group.position.y = baseY + Math.sin(t8 * 2) * p.yAmp;
-                obj.baseY = baseY;
-            }
+                // Phase inversement proportionnelle au sizeCat : compense les rayons plus grands
+                // pour que la vitesse linéaire (m/s) reste cohérente
+                p.phase += currentSpeed * dt * (0.3 / sizeCat) * p.dir;
 
-            // Limites du bassin + maintien dans la zone de profondeur
-            clampToBasin(obj.group.position, obj.config.zone);
-            // Recentrer le huit si sorti du bassin
-            const lim = compactHalfW() * 0.7;
-            if (Math.abs(p.cx) > lim || Math.abs(p.cz) > lim) {
-                p.cx = (Math.random() * 2 - 1) * lim * 0.6;
-                p.cz = (Math.random() * 2 - 1) * lim * 0.6;
+                // --- Comportement IA : override la trajectoire si proche du ROV ---
+                if (iaOverride) {
+                    // Déplacement direct vers la cible (fuir/curieux)
+                    const targetQ = new THREE.Quaternion().setFromAxisAngle(
+                        new THREE.Vector3(0, 1, 0), obj.targetYaw
+                    );
+                    // Les gros animaux tournent plus lentement (÷sizeCat)
+                    const slerpFactor = Math.min(0.12 / sizeCat, turnSpeed * 0.08 / sizeCat * dt * 60);
+                    obj.group.quaternion.slerp(targetQ, slerpFactor);
+                    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(obj.group.quaternion);
+                    obj.group.position.addScaledVector(forward, currentSpeed * dt);
+                    // Recentrer le huit sur la nouvelle position
+                    p.cx = obj.group.position.x;
+                    p.cz = obj.group.position.z;
+                } else {
+                    // --- Trajectoire en huit (lemniscate) ---
+                    const t8 = p.phase;
+                    const sinT = Math.sin(t8), cosT = Math.cos(t8);
+                    const denom = 1 + sinT * sinT;
+                    // Position sur la lemniscate
+                    const newX = p.cx + p.rx * cosT / denom;
+                    const newZ = p.cz + p.rz * sinT * cosT / denom;
+                    // Tangente = direction naturelle
+                    const dx = newX - obj.group.position.x;
+                    const dz = newZ - obj.group.position.z;
+                    const tangentYaw = Math.atan2(dx, dz);
+                    // Orientation fluide (slerp) : plus lent pour les gros animaux
+                    const slerpFactor = Math.min(0.18 / sizeCat, turnSpeed * 0.12 / sizeCat * dt * 60);
+                    const targetQ = new THREE.Quaternion().setFromAxisAngle(
+                        new THREE.Vector3(0, 1, 0), tangentYaw
+                    );
+                    obj.group.quaternion.slerp(targetQ, slerpFactor);
+                    // Appliquer la position
+                    obj.group.position.x = newX;
+                    obj.group.position.z = newZ;
+                    // Léger mouvement vertical sinusoïdal
+                    const baseY = obj.baseY != null ? obj.baseY : obj.group.position.y;
+                    obj.group.position.y = baseY + Math.sin(t8 * 2) * p.yAmp;
+                    obj.baseY = baseY;
+                }
+
+                // Limites du bassin + maintien dans la zone de profondeur
+                clampToBasin(obj.group.position, obj.config.zone);
+                // Clamp du centre du huit : empêche de sortir du bassin
+                // sans attirer vers (0,0) — évite l'effet siphon.
+                const lim = compactHalfW() * 0.8;
+                p.cx = THREE.MathUtils.clamp(p.cx, -lim, lim);
+                p.cz = THREE.MathUtils.clamp(p.cz, -lim, lim);
             }
 
         // --- Mode cinématique : ancre_ondule (flore, algues, coraux mous) ---
@@ -1521,19 +1923,24 @@ function clampToBasin(pos, zone) {
     pos.x = THREE.MathUtils.clamp(pos.x, -lim, lim);
     pos.z = THREE.MathUtils.clamp(pos.z, -lim, lim);
 
+    // Marge sous la surface : empêche tout modèle de dépasser CEIL_Y.
+    // 1.5 m : suffisant pour les petits/moyens modèles, et permet aux
+    // mammifères (baleine) de remonter près de la surface sans conflit.
+    const SURF_MARGIN = 1.5;
+
     // Contraintes Y par zone pour maintenir l'objet dans sa couche
     switch (zone) {
         case 'surface':
-            pos.y = THREE.MathUtils.clamp(pos.y, CEIL_Y - 4, CEIL_Y - 0.3);
+            pos.y = THREE.MathUtils.clamp(pos.y, CEIL_Y - 8, CEIL_Y - SURF_MARGIN);
             break;
         case 'fond':
             pos.y = THREE.MathUtils.clamp(pos.y, FLOOR_Y + 0.2, FLOOR_Y + 5);
             break;
         case 'pleine_eau':
-            pos.y = THREE.MathUtils.clamp(pos.y, FLOOR_Y * 0.9, CEIL_Y - 1);
+            pos.y = THREE.MathUtils.clamp(pos.y, FLOOR_Y * 0.9, CEIL_Y - SURF_MARGIN);
             break;
         default:
-            pos.y = THREE.MathUtils.clamp(pos.y, FLOOR_Y + 0.3, CEIL_Y - 0.1);
+            pos.y = THREE.MathUtils.clamp(pos.y, FLOOR_Y + 1, CEIL_Y - SURF_MARGIN);
     }
 }
 
@@ -3029,6 +3436,8 @@ try {
     window.addEventListener('storage', e => { if (e.key === GP_LS_MAPPING_KEY) loadGamepadProfile(); });
     window.addEventListener('gamepad-mapping-changed', loadGamepadProfile);
     animate();
+    // Vue FPV par défaut
+    setFpv(true);
 } catch (e) {
     console.error(e);
     showError('Initialisation 3D impossible');

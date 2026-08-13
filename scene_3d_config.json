@@ -20,29 +20,29 @@
       "name": "thon",
       "type": "faune",
       "model": "bluefin_tuna.glb",
-      "real_size_m": 0.4,
-      "count": 57,
+      "real_size_m": 0.3,
+      "count": 30,
       "scale_min": 0.8,
       "scale_max": 1.2,
       "kinematic": "nageant",
       "zone": "pleine_eau",
-      "speed": 1.5,
+      "speed": 0.9,
       "behavior": "curieux",
       "trajectory": "libre",
       "wander_radius": 5,
       "turn_speed": 0.4
     },
     {
-      "name": "Baleine blue",
-      "type": "faune",
+      "name": "Baleine bleue",
+      "type": "mamifere",
       "model": "blue_whale_-_textured.glb",
-      "real_size_m": 20,
+      "real_size_m": 25,
       "count": 1,
       "scale_min": 0.8,
       "scale_max": 1.2,
-      "kinematic": "fixe",
+      "kinematic": "nageant",
       "zone": "pleine_eau",
-      "speed": 1.5,
+      "speed": 0.3,
       "behavior": "nageant"
     },
     {
@@ -55,8 +55,8 @@
       "scale_max": 1.2,
       "kinematic": "fixe",
       "zone": "pleine_eau",
-      "speed": 4,
-      "behavior": "nageant"
+      "speed": 2,
+      "behavior": "curieux"
     },
     {
       "name": "esturgeon",
@@ -67,8 +67,8 @@
       "scale_min": 0.8,
       "scale_max": 1.2,
       "kinematic": "fixe",
-      "zone": "fond",
-      "speed": 0.6,
+      "zone": "pleine_eau",
+      "speed": 1,
       "behavior": "curieux"
     },
     {
@@ -136,8 +136,8 @@
     "surface": {
       "waves": {
         "enabled": true,
-        "height": 0.2,
-        "speed": 2
+        "height": 0.6,
+        "speed": 1.1
       },
       "caustics": {
         "enabled": true,
@@ -148,6 +148,6 @@
         "intensity": 0.05
       }
     },
-    "compact_zone": 0
+    "compact_zone": 85
   }
 }

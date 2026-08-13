@@ -304,13 +304,14 @@ const SceneConfig = (() => {
             }));
             tr.appendChild(tdName);
 
-            // ── Colonne 3 : Type (faune / flore / objet) ──
+            // ── Colonne 3 : Type (faune / flore / objet / mammifère) ──
             const tdType = document.createElement('td');
             tdType.appendChild(_el('select', {
                 innerHTML: _buildOptions([
-                    { value: 'faune',  label: '🐠 Faune' },
-                    { value: 'flore',  label: '🌿 Flore' },
-                    { value: 'objet',  label: '📦 Objet' }
+                    { value: 'faune',     label: '🐠 Faune' },
+                    { value: 'flore',     label: '🌿 Flore' },
+                    { value: 'objet',     label: '📦 Objet' },
+                    { value: 'mamifere',  label: '🐋 Mammifère' }
                 ], obj.type),
                 onChange: (e) => {
                     _updateObject(idx, 'type', e.target.value);
@@ -318,6 +319,13 @@ const SceneConfig = (() => {
                     if (e.target.value === 'flore') {
                         _updateObject(idx, 'kinematic', 'ancre_ondule');
                         _updateObject(idx, 'zone', 'fond');
+                        _renderObjects();
+                    }
+                    // Auto-config pour mammifère : nageant, pleine eau, curieux
+                    if (e.target.value === 'mamifere') {
+                        _updateObject(idx, 'kinematic', 'nageant');
+                        _updateObject(idx, 'zone', 'pleine_eau');
+                        _updateObject(idx, 'behavior', 'curieux');
                         _renderObjects();
                     }
                 }

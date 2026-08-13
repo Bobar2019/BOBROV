@@ -218,14 +218,24 @@ class WebServer:
 
     def _setup_static(self):
         """Monte les fichiers statiques du frontend"""
+
+        # Sous-classe StaticFiles qui ajoute Cache-Control: no-store
+        # pour éviter ERR_CONTENT_LENGTH_MISMATCH quand les fichiers JS/CSS
+        # sont modifiés sans redémarrer le serveur.
+        class NoCacheStaticFiles(StaticFiles):
+            async def get_response(self, path, scope):
+                response = await super().get_response(path, scope)
+                response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+                return response
+
         frontend_path = Path("frontend")
         if frontend_path.exists():
             css_path = frontend_path / "css"
             js_path = frontend_path / "js"
             if css_path.exists():
-                self.app.mount("/css", StaticFiles(directory=str(css_path)), name="css")
+                self.app.mount("/css", NoCacheStaticFiles(directory=str(css_path)), name="css")
             if js_path.exists():
-                self.app.mount("/js", StaticFiles(directory=str(js_path)), name="js")
+                self.app.mount("/js", NoCacheStaticFiles(directory=str(js_path)), name="js")
             logger.info(f"Fichiers statiques montés depuis {frontend_path}")
         else:
             logger.warning(f"Dossier frontend non trouvé: {frontend_path}")
