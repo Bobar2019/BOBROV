@@ -27,7 +27,7 @@
       "kinematic": "nageant",
       "zone": "pleine_eau",
       "speed": 0.9,
-      "behavior": "curieux",
+      "behavior": "nageant",
       "trajectory": "libre",
       "wander_radius": 5,
       "turn_speed": 0.4
@@ -56,7 +56,7 @@
       "kinematic": "fixe",
       "zone": "pleine_eau",
       "speed": 2,
-      "behavior": "curieux"
+      "behavior": "nageant"
     },
     {
       "name": "esturgeon",
@@ -69,7 +69,7 @@
       "kinematic": "fixe",
       "zone": "pleine_eau",
       "speed": 1,
-      "behavior": "curieux"
+      "behavior": "nageant"
     },
     {
       "name": "plante ",
