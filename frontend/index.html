@@ -1004,6 +1004,22 @@
                             <div class="s3d-env-head"><label>Hauteur relief <span class="s3d-info" data-tip="Amplitude du relief en mètres (0 = fond plat)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-terrain-height-val">0.9</span></div>
                             <input type="range" class="s3d-env-slider" id="env-terrain-height" min="0" max="2" step="0.1" value="0.9">
                         </div>
+                        <div class="s3d-env-row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.07);padding-top:6px;">
+                            <div class="s3d-env-head"><label>🏖️ Plafond plage (sable) <span class="s3d-info" data-tip="Profondeur max de la zone sable blanc (0m = surface)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-biome-beach-val">-8 m</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-biome-beach" min="-20" max="-1" step="1" value="-8">
+                        </div>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>🪸 Plafond récif (roche) <span class="s3d-info" data-tip="Profondeur max de la zone corail/roche" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-biome-reef-val">-25 m</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-biome-reef" min="-60" max="-5" step="1" value="-25">
+                        </div>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>🕳️ Seuil abysse (limon) <span class="s3d-info" data-tip="Profondeur à partir de laquelle le limon sombre apparaît" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-biome-abyss-val">-30 m</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-biome-abyss" min="-100" max="-10" step="1" value="-30">
+                        </div>
+                        <div class="s3d-env-row">
+                            <div class="s3d-env-head"><label>🎨 Douceur transition <span class="s3d-info" data-tip="Largeur de la zone de fondu entre les textures (en mètres)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-biome-blend-val">3.0 m</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-biome-blend" min="0.5" max="10" step="0.5" value="3.0">
+                        </div>
                     </div>
 
                     <!-- Parois -->

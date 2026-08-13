@@ -9,6 +9,16 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+// --- Masquer les avertissements GLTFLoader pour extensions PBR non supportées ---
+{
+    const _origWarn = console.warn;
+    console.warn = function (...args) {
+        const msg = (args[0] || '').toString();
+        if (msg.includes('KHR_materials_pbrSpecularGlossiness') || msg.includes('KHR_materials_unlit')) return;
+        _origWarn.apply(console, args);
+    };
+}
+
 // --- Constantes ROV ---
 const MODEL_LENGTH = 0.4;
 const MOTOR_NAMES = {
@@ -40,7 +50,7 @@ let sunDir, sunFill, sunAmbient;
 let surfaceMesh = null, causticsMesh = null, godRaysGroup = null;
 const clock = new THREE.Clock();
 
-const physState = { inertia: 0.90, gain: 1.0, sens: 0.45, rollSens: 1.0, pitchSens: 1.0 };
+const physState = { inertia: 0.90, gain: 1.0, sens: 0.45, rollSens: 1.0, pitchSens: 1.0, speedBoost: 1.0 };
 const diveState = { depth: 30, visibility: 25, extent: 100, walls: true, terrain: false, reliefHeight: 5, abyssDepth: 15, abyssRadius: 45,
                     led: false, ledIntensity: 80, ledTilt: 12 };
 let FLOOR_Y = -30.0;
@@ -95,7 +105,8 @@ const coralData = [[], [], [], []];
 const fishData = [];
 const abyssData = [];
 const pikeData = [];
-let wallTex = null, wallNrm = null, wallMat = null, terrainTex = null;
+let wallTex = null, wallNrm = null, wallMat = null, terrainTex = null, sandTex = null, abyssTex = null;
+let terrainBiomeUniforms = null;  // seuils de biomes pour couleurs vertex du terrain
 const _lifeM4 = new THREE.Matrix4();
 const _lifeQ = new THREE.Quaternion();
 const _lifeQ2 = new THREE.Quaternion();
@@ -124,6 +135,11 @@ let envState = {
     waves: true, waveHeight: 0.5, waveSpeed: 1.0,
     caustics: true, causticsIntensity: 0.7,
     godrays: true, godraysIntensity: 0.5,
+    // Biomes : paliers de profondeur pour textures de sol
+    biomeBeachMax: -8.0,    // plafond zone sable (m, négatif)
+    biomeReefMax: -25.0,    // plafond zone récif/roche
+    biomeAbyssMin: -30.0,   // seuil zone limon abyssal
+    biomeBlendSmooth: 3.0,  // largeur du fondu (m)
 };
 
 // Gamepad
@@ -397,11 +413,12 @@ function fbm2(x, z) {
     return 0.55 * noise2(x, z) + 0.30 * noise2(x * 2.1, z * 2.1) + 0.15 * noise2(x * 4.3, z * 4.3);
 }
 
-// Hauteur du relief : Blue Hole (plateau corallien + fosse abyssale)
+// Hauteur du relief : Blue Hole (plateau corallien + fosse abyssale + plages proportionnelles)
 // Le plateau reste à une profondeur fixe (biologie récifale ~20-25 m).
 // La fosse descend TOUJOURS jusqu'à FLOOR_Y quelle que soit la profondeur du bassin.
+// Les plages remontent proportionnellement de la bordure (80% WALL_POS) jusqu'à la surface.
 function terrainHeightAt(x, z) {
-    // === Blue Hole : plateau corallien + fosse abyssale centrale ===
+    // === Blue Hole : plateau corallien + fosse abyssale centrale + plages ===
     const reliefAmp = diveState.reliefHeight;  // amplitude du relief (stalactites/stalagmites)
     const abyssBelow = diveState.abyssDepth;   // profondeur supplémentaire de la fosse sous le plateau
     const pitPct = diveState.abyssRadius / 100; // rayon fosse en % de WALL_POS
@@ -415,33 +432,54 @@ function terrainHeightAt(x, z) {
                 + fbm2(x * 1.1 + 19.7, z * 1.1 + 5.9) * reliefAmp * 0.16;
     const plateauY = Math.min(plateauBase + (diveState.terrain ? coral : 0), -1.0);
 
-    // Bassin trop peu profond pour avoir une fosse : tout est plateau
-    if (FLOOR_Y >= -(REEF_DEPTH + reliefAmp) - 1) return plateauY;
+    // ── Plage proportionnelle : pente douce de 80% à 100% de WALL_POS ──
+    // Le ratio est constant → la plage s'élargit automatiquement avec le bassin.
+    const dist = Math.hypot(x, z);
+    const beachInner = WALL_POS * 0.82;  // début de la pente
+    const beachOuter = WALL_POS;         // bord du bassin (surface)
+
+    // Bassin trop peu profond pour avoir une fosse : tout est plateau (ou plage)
+    if (FLOOR_Y >= -(REEF_DEPTH + reliefAmp) - 1) {
+        if (dist >= beachInner && beachOuter > beachInner) {
+            const beachT = THREE.MathUtils.smoothstep(dist, beachInner, beachOuter);
+            const beachS = beachT * beachT * (3 - 2 * beachT); // cubique douce
+            const surfaceY = CEIL_Y - 0.5;
+            return plateauY + (surfaceY - plateauY) * beachS;
+        }
+        return plateauY;
+    }
 
     // Fosse abyssale centrée
     const R = WALL_POS * pitPct;
     const rim = (fbm2(x * 0.05 + 31.4, z * 0.05 + 12.8) - 0.5) * R * 0.35;
     const r = Math.hypot(x, z) + rim;
-    if (r >= R) return plateauY;
 
-    // Transition douce plateau → fosse (smoothstep cubique)
-    const t = THREE.MathUtils.smoothstep(r, R * 0.45, R);
-    const s = t * t * (3 - 2 * t);
+    let computedY;
+    if (r >= R) {
+        computedY = plateauY;
+    } else {
+        // Transition douce plateau → fosse (smoothstep cubique)
+        const t = THREE.MathUtils.smoothstep(r, R * 0.45, R);
+        const s = t * t * (3 - 2 * t);
 
-    // Fond de la fosse : le plus profond possible entre le paramètre
-    // abyssDepth et le fond réel du bassin (FLOOR_Y).
-    // Pour les bassins peu profonds : la fosse est limitée par FLOOR_Y.
-    // Pour les bassins profonds : la fosse atteint FLOOR_Y.
-    //   - Bassin 30 m  : max(min(-39,-30), -30) = max(-30,-30) = -30 ✓
-    //   - Bassin 115 m : max(min(-39,-115), -115) = max(-115,-115) = -115 ✓
-    //   - Bassin 50 m  : max(min(-39,-50), -50) = max(-50,-50) = -50 ✓
-    const floorVariation = fbm2(x * 0.06 + 3.7, z * 0.06 + 8.2) * 3.0;
-    const abyssY = Math.max(
-        Math.min(plateauY - abyssBelow, FLOOR_Y) + floorVariation,
-        FLOOR_Y
-    );
+        // Fond de la fosse : atteint toujours FLOOR_Y dans les bassins profonds.
+        const floorVariation = fbm2(x * 0.06 + 3.7, z * 0.06 + 8.2) * 3.0;
+        const abyssY = Math.max(
+            Math.min(plateauY - abyssBelow, FLOOR_Y) + floorVariation,
+            FLOOR_Y
+        );
+        computedY = abyssY + (plateauY - abyssY) * s;
+    }
 
-    return abyssY + (plateauY - abyssY) * s;
+    // ── Application de la plage sur computedY ──
+    if (dist >= beachInner && beachOuter > beachInner) {
+        const beachT = THREE.MathUtils.smoothstep(dist, beachInner, beachOuter);
+        const beachS = beachT * beachT * (3 - 2 * beachT);
+        const surfaceY = CEIL_Y - 0.5;
+        computedY = computedY + (surfaceY - computedY) * beachS;
+    }
+
+    return computedY;
 }
 
 function floorLimitAt(x, z) {
@@ -514,6 +552,62 @@ function makeRockTexture() {
     return tex;
 }
 
+// Texture de sable blanc procédurale (plages peu profondes)
+function makeSandTexture() {
+    const size = 512;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    const img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const n1 = fbm2(x * 0.06 + 5.3, y * 0.06 + 8.1);
+            const n2 = fbm2(x * 0.25 + 12, y * 0.25 + 7);
+            const grain = fbm2(x * 0.8 + 33, y * 0.8 + 11);
+            const n = n1 * 0.4 + n2 * 0.35 + grain * 0.25;
+            const v = 180 + n * 55;
+            const i = (y * size + x) * 4;
+            img.data[i]     = Math.min(255, v * 1.02);
+            img.data[i + 1] = Math.min(255, v * 0.96);
+            img.data[i + 2] = Math.min(255, v * 0.78);
+            img.data[i + 3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return tex;
+}
+
+// Texture de limon sombre abyssal (fonds profonds)
+function makeAbyssTexture() {
+    const size = 512;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    const img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const n1 = fbm2(x * 0.04 + 20, y * 0.04 + 40);
+            const n2 = fbm2(x * 0.15 + 60, y * 0.15 + 30);
+            const n = n1 * 0.6 + n2 * 0.4;
+            const v = 20 + n * 35;
+            const i = (y * size + x) * 4;
+            img.data[i]     = v * 0.7;
+            img.data[i + 1] = v * 0.85;
+            img.data[i + 2] = v * 1.1;
+            img.data[i + 3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return tex;
+}
 // Normal map procédural pour relief rocheux
 function makeRockNormalMap() {
     const size = 512;
@@ -619,16 +713,43 @@ function buildTerrain() {
     const segs = terrainSegs();
     const geo = new THREE.PlaneGeometry(WALL_POS * 2, WALL_POS * 2, segs, segs);
     geo.rotateX(-Math.PI / 2);
-    // Texture rocheuse
-    if (!terrainTex) terrainTex = makeRockTexture();
-    terrainTex.repeat.set(terrainTexRepeats(), terrainTexRepeats());
-    terrainMesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-        map: terrainTex, roughness: 0.95, metalness: 0.0,
-    }));
-    envMats.push(terrainMesh.material);
+
+    // ── Couleurs biomes (référence conservée pour maj dynamique) ──
+    terrainBiomeUniforms = {
+        uBeachMax:  envState.biomeBeachMax,
+        uReefMax:   envState.biomeReefMax,
+        uAbyssMin:  envState.biomeAbyssMin,
+        uBlend:     Math.max(envState.biomeBlendSmooth, 0.1),
+        colorSand:  new THREE.Color(0xc8b18a),   // beige sable naturel
+        colorReef:  new THREE.Color(0x3a4f47),   // roche corallienne sous-marine
+        colorAbyss: new THREE.Color(0x09131d),   // limon sombre bleu nuit
+    };
+
+    // ── MeshStandardMaterial : reçoit automatiquement SpotLights + FogExp2 ──
+    const mat = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        roughness: 0.92,
+        metalness: 0.0,
+        flatShading: false,
+    });
+    mat.envMapIntensity = 0.3;
+
+    terrainMesh = new THREE.Mesh(geo, mat);
     terrainMesh.receiveShadow = true;
     updateTerrainGeometry();
     scene.add(terrainMesh);
+    // Ajouter aux matériaux environnement pour maj profondeur
+    envMats.push(mat);
+}
+
+/** Met à jour les seuils de biomes et recalcule les couleurs vertex du terrain */
+function updateTerrainBiomeUniforms() {
+    if (!terrainBiomeUniforms) return;
+    terrainBiomeUniforms.uBeachMax = envState.biomeBeachMax;
+    terrainBiomeUniforms.uReefMax  = envState.biomeReefMax;
+    terrainBiomeUniforms.uAbyssMin = envState.biomeAbyssMin;
+    terrainBiomeUniforms.uBlend    = Math.max(envState.biomeBlendSmooth, 0.1);
+    computeTerrainVertexColors();
 }
 
 function updateTerrainGeometry() {
@@ -639,7 +760,49 @@ function updateTerrainGeometry() {
     }
     pos.needsUpdate = true;
     terrainMesh.geometry.computeVertexNormals();
+    computeTerrainVertexColors();
     updateAlgaeAnchors();
+}
+
+/**
+ * Calcule les couleurs par vertex du terrain selon l'altitude Y (biomes).
+ * Sable en surface, roche sur le plateau, limon dans l'abysse.
+ * Utilise smoothstep pour des transitions fluides.
+ */
+function computeTerrainVertexColors() {
+    if (!terrainMesh || !terrainBiomeUniforms) return;
+    const geo = terrainMesh.geometry;
+    const pos = geo.attributes.position;
+    const count = pos.count;
+    const colors = new Float32Array(count * 3);
+    const _c = new THREE.Color();
+
+    const beachMax = terrainBiomeUniforms.uBeachMax;
+    const reefMax  = terrainBiomeUniforms.uReefMax;
+    const halfB    = Math.max(terrainBiomeUniforms.uBlend, 0.1) * 0.5;
+    const cSand    = terrainBiomeUniforms.colorSand;
+    const cReef    = terrainBiomeUniforms.colorReef;
+    const cAbyss   = terrainBiomeUniforms.colorAbyss;
+
+    for (let i = 0; i < count; i++) {
+        const y = pos.getY(i);
+
+        // Transition abysse → récif (y croissant : abysse → roche)
+        const tReef = THREE.MathUtils.smoothstep(y, reefMax - halfB, reefMax + halfB);
+        // Transition récif → plage (y croissant : roche → sable)
+        const tBeach = THREE.MathUtils.smoothstep(y, beachMax - halfB, beachMax + halfB);
+
+        _c.copy(cAbyss).lerp(cReef, tReef);
+        _c.lerp(cSand, tBeach);
+
+        // Légère variation pour casser l'uniformité
+        const px = pos.getX(i), pz = pos.getZ(i);
+        const noise = Math.sin(px * 0.7) * Math.cos(pz * 0.9) * 0.025;
+        colors[i * 3]     = THREE.MathUtils.clamp(_c.r + noise, 0, 1);
+        colors[i * 3 + 1] = THREE.MathUtils.clamp(_c.g + noise, 0, 1);
+        colors[i * 3 + 2] = THREE.MathUtils.clamp(_c.b + noise * 0.5, 0, 1);
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 }
 
 function rebuildTerrainGeometry() {
@@ -649,7 +812,6 @@ function rebuildTerrainGeometry() {
     const geo = new THREE.PlaneGeometry(WALL_POS * 2, WALL_POS * 2, segs, segs);
     geo.rotateX(-Math.PI / 2);
     terrainMesh.geometry = geo;
-    if (terrainTex) terrainTex.repeat.set(terrainTexRepeats(), terrainTexRepeats());
     updateTerrainGeometry();
 }
 
@@ -962,6 +1124,14 @@ async function loadEnvironmentConfig() {
         // Terrain & Parois (viennent du JSON, plus du localStorage)
         if (env.terrain) {
             diveState.terrain = env.terrain.enabled !== false;
+            // Biomes (paliers de texture de sol)
+            if (env.terrain.biomes) {
+                const b = env.terrain.biomes;
+                if (b.beach_depth_max !== undefined) envState.biomeBeachMax = b.beach_depth_max;
+                if (b.reef_depth_max !== undefined) envState.biomeReefMax = b.reef_depth_max;
+                if (b.abyss_depth_min !== undefined) envState.biomeAbyssMin = b.abyss_depth_min;
+                if (b.blend_smoothness !== undefined) envState.biomeBlendSmooth = b.blend_smoothness;
+            }
         }
         if (env.walls) {
             diveState.walls = env.walls.enabled !== false;
@@ -989,6 +1159,8 @@ async function loadEnvironmentConfig() {
         // Construire/reconstruire terrain et parois selon la config JSON
         buildWalls();
         buildTerrain();
+        // Mettre à jour les uniforms biomes après le chargement
+        updateTerrainBiomeUniforms();
         // Surface + caustiques + god rays
         buildSurface();
         buildCaustics();
@@ -1487,55 +1659,129 @@ const SPAWN_GUARD_RADIUS = 5.0;  // mètres
 function positionInZone(group, obj) {
     const zone = obj.zone || 'pleine_eau';
     const halfW = compactHalfW() * 0.92;  // zone de spawn très large pour éparpiller
-    // --- Position X/Z avec garde anti-chevauchement ROV ---
-    let x, z;
-    for (let attempt = 0; attempt < 30; attempt++) {
-        x = (Math.random() * 2 - 1) * halfW;
-        z = (Math.random() * 2 - 1) * halfW;
-        if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
-    }
-    // --- Altitude Y selon la zone ---
     // Marge sous la surface : empêche les modèles de dépasser CEIL_Y.
-    // 1.5 m suffit : la plupart des modèles GLB sont centrés et les grands
-    // animaux (baleine) ont besoin de remonter près de la surface.
     const SURF_MARGIN = 1.5;
-    let y;
+    // Rayon de la fosse abyssale (fraction de WALL_POS)
+    const abyssR = WALL_POS * (diveState.abyssRadius / 100);
+    // --- Position X/Z + Y selon la zone ---
+    let x, z, y;
+
     switch (zone) {
+
+        // ── SOL : plateau corallien (hors fosse) ──
+        case 'sol': {
+            for (let attempt = 0; attempt < 40; attempt++) {
+                x = (Math.random() * 2 - 1) * halfW;
+                z = (Math.random() * 2 - 1) * halfW;
+                // Exclure la fosse abyssale + garde ROV
+                if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS && Math.hypot(x, z) > abyssR * 1.15) break;
+            }
+            const floorY = terrainMeshHeightAt(x, z);
+            if (obj.type === 'flore') {
+                y = floorY + 0.05;                         // ancré au sol
+            } else {
+                y = floorY + 0.5 + Math.random() * 4.0;   // faune juste au-dessus du récif
+            }
+            break;
+        }
+
+        // ── PLAGE : pente douce proportionnelle en bordure (82%→100% de WALL_POS) ──
+        case 'plage': {
+            // Biaisé vers la portion habitable de la plage (terrain entre -1m et -8m)
+            const beachInner = WALL_POS * 0.88;  // portion superficielle uniquement
+            const beachOuter = WALL_POS * 0.96;
+            for (let attempt = 0; attempt < 40; attempt++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = beachInner + Math.random() * (beachOuter - beachInner);
+                x = Math.cos(angle) * dist;
+                z = Math.sin(angle) * dist;
+                if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
+            }
+            const floorY = terrainMeshHeightAt(x, z);
+            if (obj.type === 'flore') {
+                // Flore ancrée au sol de la plage
+                y = floorY + 0.05;
+            } else {
+                // Faune : nage dans la colonne d'eau au-dessus du sol
+                const topY = Math.max(floorY + 0.5, CEIL_Y - 1.5);
+                const botY = floorY + 0.2;
+                y = botY + Math.random() * Math.max(0.3, topY - botY);
+            }
+            break;
+        }
+
+        // ── ABYSSE : exclusivement au fond de la fosse abyssale ──
+        case 'abysse': {
+            // Confiné dans le rayon de la fosse (avec petite marge intérieure)
+            const maxR = abyssR * 0.85;
+            for (let attempt = 0; attempt < 40; attempt++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * maxR;
+                x = Math.cos(angle) * dist;
+                z = Math.sin(angle) * dist;
+                break;
+            }
+            const floorY = terrainMeshHeightAt(x, z);
+            if (obj.type === 'flore') {
+                y = floorY + 0.05;                          // ancré au sol abyssal
+            } else {
+                y = floorY + 0.2 + Math.random() * 2.0;    // faune proche du fond
+            }
+            break;
+        }
+
+        // ── SURFACE : juste sous la surface ──
         case 'surface':
-            // Juste sous la surface : -2 à -5 m
+            for (let attempt = 0; attempt < 30; attempt++) {
+                x = (Math.random() * 2 - 1) * halfW;
+                z = (Math.random() * 2 - 1) * halfW;
+                if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
+            }
             y = CEIL_Y - 2 - Math.random() * 3;
             break;
-        case 'fond':
-            // Proche du sol : terrain + 0.3 à terrain + 3 m
-            {
-                const floorY = terrainMeshHeightAt(x, z);
-                if (obj.type === 'flore') {
-                    y = floorY + 0.05;
-                } else {
-                    y = floorY + 0.3 + Math.random() * 2.7;
-                }
+
+        // ── FOND (rétrocompatibilité) : proche du sol, toute zone ──
+        case 'fond': {
+            for (let attempt = 0; attempt < 30; attempt++) {
+                x = (Math.random() * 2 - 1) * halfW;
+                z = (Math.random() * 2 - 1) * halfW;
+                if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
             }
+            const floorY = terrainMeshHeightAt(x, z);
+            y = (obj.type === 'flore') ? floorY + 0.05 : floorY + 0.3 + Math.random() * 2.7;
             break;
-        case 'pleine_eau':
-            // Colonne d'eau : biaisé vers les faibles profondeurs (lumière + visibilité)
-            // Distribution exponentielle : ~50% dans les 10 premiers mètres,
-            // le reste réparti dans la colonne d'eau profonde.
-            {
-                const depth = -FLOOR_Y;
-                const shallow = Math.min(depth * 0.35, 20); // zone lumineuse (max 20 m)
-                const deep = depth - 3;
-                const r = Math.random();
-                const biased = r * r; // courbe quadratique : plus de valeurs faibles
-                y = -(shallow + biased * (deep - shallow));
+        }
+
+        // ── PLEINE EAU : colonne d'eau, biaisé vers les faibles profondeurs ──
+        case 'pleine_eau': {
+            for (let attempt = 0; attempt < 30; attempt++) {
+                x = (Math.random() * 2 - 1) * halfW;
+                z = (Math.random() * 2 - 1) * halfW;
+                if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
             }
+            const depth = -FLOOR_Y;
+            const shallow = Math.min(depth * 0.35, 20);
+            const deep = depth - 3;
+            const r = Math.random();
+            const biased = r * r;
+            y = -(shallow + biased * (deep - shallow));
             break;
-        default:
-            // multi-couches / inconnu : répartition uniforme sous la surface
-            {
-                const yMin = FLOOR_Y + 1;
-                const yMax = CEIL_Y - SURF_MARGIN;
-                y = yMin + Math.random() * (yMax - yMin);
+        }
+
+        // ── MULTI_COUCHE (défaut) : surface (-2m) → plateau corallien (~-25m), hors fosse ──
+        default: {
+            for (let attempt = 0; attempt < 30; attempt++) {
+                x = (Math.random() * 2 - 1) * halfW;
+                z = (Math.random() * 2 - 1) * halfW;
+                if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
             }
+            // Entre CEIL_Y - 2 (juste sous surface) et le plateau corallien (~-REEF_DEPTH)
+            // Exclut la fosse abyssale
+            const yMax = CEIL_Y - SURF_MARGIN;          // -1.5 m
+            const yMin = -(REEF_DEPTH + diveState.reliefHeight);  // ~-25 m
+            y = yMin + Math.random() * (yMax - yMin);
+            break;
+        }
     }
     group.position.set(x, y, z);
     group.rotation.y = Math.random() * Math.PI * 2;
@@ -1920,25 +2166,88 @@ function updateSceneObjects(dt) {
 
 function clampToBasin(pos, zone) {
     const lim = compactHalfW() * 0.9;
-    pos.x = THREE.MathUtils.clamp(pos.x, -lim, lim);
-    pos.z = THREE.MathUtils.clamp(pos.z, -lim, lim);
-
-    // Marge sous la surface : empêche tout modèle de dépasser CEIL_Y.
-    // 1.5 m : suffisant pour les petits/moyens modèles, et permet aux
-    // mammifères (baleine) de remonter près de la surface sans conflit.
+    // Marge sous la surface
     const SURF_MARGIN = 1.5;
+    // Rayon de la fosse abyssale
+    const abyssR = WALL_POS * (diveState.abyssRadius / 100);
 
-    // Contraintes Y par zone pour maintenir l'objet dans sa couche
+    // ── Contraintes X/Z par zone ──
+    switch (zone) {
+        case 'abysse': {
+            // Confinement strict dans le périmètre de la fosse
+            const dist = Math.hypot(pos.x, pos.z);
+            const maxR = abyssR * 0.90;
+            if (dist > maxR && dist > 0.01) {
+                const scale = maxR / dist;
+                pos.x *= scale;
+                pos.z *= scale;
+            }
+            break;
+        }
+        case 'plage': {
+            // Maintenir dans la bande plage habitable (88%–96% de WALL_POS)
+            const innerR = WALL_POS * 0.88;
+            const outerR = WALL_POS * 0.96;
+            const dist = Math.hypot(pos.x, pos.z);
+            if (dist < innerR && dist > 0.01) {
+                const scale = innerR / dist;
+                pos.x *= scale;
+                pos.z *= scale;
+            } else if (dist > outerR) {
+                const scale = outerR / dist;
+                pos.x *= scale;
+                pos.z *= scale;
+            }
+            break;
+        }
+        default:
+            pos.x = THREE.MathUtils.clamp(pos.x, -lim, lim);
+            pos.z = THREE.MathUtils.clamp(pos.z, -lim, lim);
+    }
+
+    // ── Contraintes Y par zone ──
     switch (zone) {
         case 'surface':
             pos.y = THREE.MathUtils.clamp(pos.y, CEIL_Y - 8, CEIL_Y - SURF_MARGIN);
             break;
+        case 'sol': {
+            // Plaqué au sol dynamique : terrain ± petite marge
+            const floorY = terrainMeshHeightAt(pos.x, pos.z);
+            pos.y = THREE.MathUtils.clamp(pos.y, floorY - 0.5, floorY + 5);
+            break;
+        }
+        case 'plage': {
+            const floorY = terrainMeshHeightAt(pos.x, pos.z);
+            pos.y = THREE.MathUtils.clamp(pos.y, floorY - 0.5, floorY + 4);
+            break;
+        }
+        case 'abysse': {
+            // Confiné au fond de la fosse
+            const floorY = terrainMeshHeightAt(pos.x, pos.z);
+            pos.y = THREE.MathUtils.clamp(pos.y, floorY - 0.5, floorY + 4);
+            break;
+        }
         case 'fond':
             pos.y = THREE.MathUtils.clamp(pos.y, FLOOR_Y + 0.2, FLOOR_Y + 5);
             break;
         case 'pleine_eau':
             pos.y = THREE.MathUtils.clamp(pos.y, FLOOR_Y * 0.9, CEIL_Y - SURF_MARGIN);
             break;
+        case 'multi_couches': {
+            // Entre surface (-2m) et plateau corallien, EXcluant la fosse
+            const yMin = -(REEF_DEPTH + diveState.reliefHeight);
+            const yMax = CEIL_Y - SURF_MARGIN;
+            pos.y = THREE.MathUtils.clamp(pos.y, yMin, yMax);
+            // Repousser hors du rayon de la fosse si dedans
+            const dist = Math.hypot(pos.x, pos.z);
+            if (dist < abyssR * 0.95 && dist > 0.01) {
+                const pushR = abyssR * 1.05;
+                const scale = pushR / dist;
+                pos.x *= scale;
+                pos.z *= scale;
+            }
+            break;
+        }
         default:
             pos.y = THREE.MathUtils.clamp(pos.y, FLOOR_Y + 1, CEIL_Y - SURF_MARGIN);
     }
@@ -2151,7 +2460,7 @@ function integratePhysics() {
     ['surge', 'sway', 'heave'].forEach(k => {
         vel[k] = (vel[k] + target[k] * TRANS_ACCEL) * inertia;
     });
-    _bodyVel.set(vel.sway, vel.heave, vel.surge).multiplyScalar(gain).applyQuaternion(orientationQuat());
+    _bodyVel.set(vel.sway, vel.heave, vel.surge).multiplyScalar(gain * physState.speedBoost).applyQuaternion(orientationQuat());
     posWorld.add(_bodyVel);
 
     // Collision relief latéral
@@ -2635,7 +2944,7 @@ function loadSettings() {
 function saveSettings() {
     try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify({
-            physState: { inertia: physState.inertia, gain: physState.gain, sens: physState.sens, rollSens: physState.rollSens, pitchSens: physState.pitchSens },
+            physState: { inertia: physState.inertia, gain: physState.gain, sens: physState.sens, rollSens: physState.rollSens, pitchSens: physState.pitchSens, speedBoost: physState.speedBoost },
             diveState: { depth: diveState.depth, visibility: diveState.visibility, extent: diveState.extent,
                          reliefHeight: diveState.reliefHeight, abyssDepth: diveState.abyssDepth, abyssRadius: diveState.abyssRadius,
                          led: diveState.led, ledIntensity: diveState.ledIntensity, ledTilt: diveState.ledTilt },
@@ -2661,6 +2970,7 @@ function syncSlidersUI() {
     sync('sim-sens',    physState.sens,    v => Math.round(parseFloat(v) * 100) + '%');
     sync('sim-roll-sens',  physState.rollSens,  v => Math.round(parseFloat(v) * 100) + '%');
     sync('sim-pitch-sens', physState.pitchSens, v => Math.round(parseFloat(v) * 100) + '%');
+    sync('sim-speed-boost', physState.speedBoost, v => v + '×');
     sync('sim-depth',     diveState.depth,     v => v + ' m');
     sync('sim-extent',    diveState.extent,    v => v + ' m');
     sync('sim-visibility', diveState.visibility, v => v + ' m');
@@ -2700,10 +3010,12 @@ function bindSliders() {
     bind('sim-sens', 'sens', physState, v => Math.round(parseFloat(v) * 100) + '%');
     bind('sim-roll-sens', 'rollSens', physState, v => Math.round(parseFloat(v) * 100) + '%');
     bind('sim-pitch-sens', 'pitchSens', physState, v => Math.round(parseFloat(v) * 100) + '%');
+    bind('sim-speed-boost', 'speedBoost', physState, v => v + '×');
     bind('sim-depth', 'depth', diveState, v => v + ' m', () => applyBasinSize());
     bind('sim-extent', 'extent', diveState, v => v + ' m', () => applyBasinSize());
     bind('sim-visibility', 'visibility', diveState, v => v + ' m', () => {
         scene.fog = new THREE.FogExp2(0x0b1020, 1.7 / diveState.visibility);
+        updateTerrainBiomeUniforms();
     });
     bind('sim-relief', 'reliefHeight', diveState, v => v + ' m', () => {
         if (diveState.terrain && terrainMesh) updateTerrainGeometry();

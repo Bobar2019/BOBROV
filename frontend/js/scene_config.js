@@ -21,7 +21,7 @@ const SceneConfig = (() => {
         scale_min: 0.8,
         scale_max: 1.2,
         kinematic: "fixe",
-        zone: "fond",
+        zone: "pleine_eau",
         speed: 1.0,
         behavior: "neant"
     };
@@ -318,7 +318,7 @@ const SceneConfig = (() => {
                     // Auto-config pour la flore : fixe au sol avec ondulation
                     if (e.target.value === 'flore') {
                         _updateObject(idx, 'kinematic', 'ancre_ondule');
-                        _updateObject(idx, 'zone', 'fond');
+                        _updateObject(idx, 'zone', 'sol');
                         _renderObjects();
                     }
                     // Auto-config pour mammifère : nageant, pleine eau, curieux
@@ -374,10 +374,13 @@ const SceneConfig = (() => {
             const tdZone = document.createElement('td');
             tdZone.appendChild(_el('select', {
                 innerHTML: _buildOptions([
-                    { value: 'fond',          label: 'Fond' },
-                    { value: 'pleine_eau',    label: 'Pleine eau' },
-                    { value: 'surface',       label: 'Surface' },
-                    { value: 'multi_couches', label: 'Multi-couches' }
+                    { value: 'sol',           label: '🏔️ Sol' },
+                    { value: 'plage',         label: '🏖️ Plage' },
+                    { value: 'abysse',        label: '🕳️ Abysse' },
+                    { value: 'multi_couches', label: '📊 Multi-couches' },
+                    { value: 'pleine_eau',    label: '🌊 Pleine eau' },
+                    { value: 'surface',       label: '☀️ Surface' },
+                    { value: 'fond',          label: '⬇️ Fond (compat.)' }
                 ], obj.zone),
                 onChange: (e) => _updateObject(idx, 'zone', e.target.value)
             }));
@@ -485,7 +488,10 @@ const SceneConfig = (() => {
             creatures: { enabled: true, density: 100 },
             pikes: { enabled: true },
         },
-        terrain: { enabled: false, height: 0.9 },
+        terrain: {
+            enabled: false, height: 0.9,
+            biomes: { beach_depth_max: -8.0, reef_depth_max: -25.0, abyss_depth_min: -30.0, blend_smoothness: 3.0 }
+        },
         walls: { enabled: false, tiling: 3.0 },
         surface: {
             waves: { enabled: true, height: 0.5, speed: 1.0 },
@@ -507,6 +513,7 @@ const SceneConfig = (() => {
         if (!env.abyss.creatures) env.abyss.creatures = JSON.parse(JSON.stringify(DEFAULT_ENV.abyss.creatures));
         if (!env.abyss.pikes) env.abyss.pikes = JSON.parse(JSON.stringify(DEFAULT_ENV.abyss.pikes));
         if (!env.terrain) env.terrain = JSON.parse(JSON.stringify(DEFAULT_ENV.terrain));
+        if (!env.terrain.biomes) env.terrain.biomes = JSON.parse(JSON.stringify(DEFAULT_ENV.terrain.biomes));
         if (!env.walls) env.walls = JSON.parse(JSON.stringify(DEFAULT_ENV.walls));
         if (!env.surface) env.surface = JSON.parse(JSON.stringify(DEFAULT_ENV.surface));
         if (!env.surface.waves) env.surface.waves = JSON.parse(JSON.stringify(DEFAULT_ENV.surface.waves));
@@ -598,6 +605,24 @@ const SceneConfig = (() => {
             () => env.terrain.height,
             v => { env.terrain.height = v; },
             v => v.toFixed(1));
+
+        // Biomes (paliers de textures de sol)
+        _bindEnvSlider('env-biome-beach',
+            () => env.terrain.biomes.beach_depth_max,
+            v => { env.terrain.biomes.beach_depth_max = v; },
+            v => v.toFixed(0) + ' m');
+        _bindEnvSlider('env-biome-reef',
+            () => env.terrain.biomes.reef_depth_max,
+            v => { env.terrain.biomes.reef_depth_max = v; },
+            v => v.toFixed(0) + ' m');
+        _bindEnvSlider('env-biome-abyss',
+            () => env.terrain.biomes.abyss_depth_min,
+            v => { env.terrain.biomes.abyss_depth_min = v; },
+            v => v.toFixed(0) + ' m');
+        _bindEnvSlider('env-biome-blend',
+            () => env.terrain.biomes.blend_smoothness,
+            v => { env.terrain.biomes.blend_smoothness = v; },
+            v => v.toFixed(1) + ' m');
 
         // Parois
         _bindEnvCheck('env-walls-enabled', () => env.walls.enabled, v => { env.walls.enabled = v; });

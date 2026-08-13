@@ -72,19 +72,6 @@
       "behavior": "nageant"
     },
     {
-      "name": "plante ",
-      "type": "flore",
-      "model": "sea_weed.glb",
-      "real_size_m": 1.39,
-      "count": 50,
-      "scale_min": 0.8,
-      "scale_max": 1.2,
-      "kinematic": "ancre_ondule",
-      "zone": "fond",
-      "speed": 1,
-      "behavior": "neant"
-    },
-    {
       "name": "epave",
       "type": "objet",
       "model": "epave.glb",
@@ -93,9 +80,22 @@
       "scale_min": 0.8,
       "scale_max": 1.2,
       "kinematic": "fixe",
-      "zone": "fond",
+      "zone": "sol",
       "speed": 1,
       "behavior": "static"
+    },
+    {
+      "name": "plante ",
+      "type": "faune",
+      "model": "sea_weed.glb",
+      "real_size_m": 1,
+      "count": 1,
+      "scale_min": 0.8,
+      "scale_max": 1.2,
+      "kinematic": "fixe",
+      "zone": "plage",
+      "speed": 1,
+      "behavior": "neant"
     }
   ],
   "environment": {
@@ -127,7 +127,13 @@
     },
     "terrain": {
       "enabled": true,
-      "height": 1
+      "height": 1,
+      "biomes": {
+        "beach_depth_max": -8,
+        "reef_depth_max": -25,
+        "abyss_depth_min": -30,
+        "blend_smoothness": 3
+      }
     },
     "walls": {
       "enabled": false,
@@ -136,16 +142,16 @@
     "surface": {
       "waves": {
         "enabled": true,
-        "height": 0.6,
-        "speed": 1.1
+        "height": 0.4,
+        "speed": 0.8
       },
       "caustics": {
         "enabled": true,
-        "intensity": 0.23
+        "intensity": 0.13
       },
       "godrays": {
         "enabled": true,
-        "intensity": 0.05
+        "intensity": 0.26
       }
     },
     "compact_zone": 85
