@@ -1,9 +1,9 @@
 # BOB-ROV - Système de Contrôle pour ROV
 
-**Version :** 1.0.0  
+**Version :** 2.0.0  
 **Plateforme :** Raspberry Pi 5  
 **Auteur :** Didier Dero  
-**Date :** Juillet 2026  
+**Date :** Août 2026  
 
 ---
 
@@ -22,42 +22,79 @@ BOB-ROV est un système de contrôle embarqué pour sous-marin téléguidé (ROV
 ## 🏗️ Architecture Technique
 
 ### Stack
-- **Backend** : FastAPI + WebSockets + OpenCV
-- **Frontend** : HTML5 + CSS3 + JavaScript Vanilla
-- **Base de données** : Fichiers JSON (profils, configuration)
+- **Backend** : Python — FastAPI + WebSockets + OpenCV
+- **Frontend** : HTML5 + CSS3 + JavaScript Vanilla + Three.js
+- **Rendu 3D** : Three.js v0.160 (via CDN jsdelivr, importmap ES modules)
+- **Base de données** : Fichiers JSON (profils, configuration, scènes 3D, layouts OSD)
 - **Communication** : REST + WebSockets (temps réel)
+- **Firmware** : ESP32-S3 (IMU 6 axes + contrôle moteurs PWM via I2C, voir `I2C_ESP32_PROTOCOL.md`)
 
 ### Arborescence
 ```
 cockpit-lite-rov/
 ├── BOBROV.md               # Documentation du projet
+├── README.md                # Documentation utilisateur
+├── CDC.md                   # Cahier des charges technique
+├── I2C_ESP32_PROTOCOL.md    # Protocole I2C ESP32-S3
 ├── config.txt              # Configuration principale
 ├── main.py                 # Point d'entrée
 ├── requirements.txt        # Dépendances Python
+├── scene_3d_config.json    # Configuration scène 3D
+├── osd_layouts.json        # Positions OSD (profils écran/lunettes)
+├── bob-rov.service         # Service systemd
 ├── backend/
 │   ├── action_dispatcher.py # Bridge commandes → fonctions
-│   ├── server.py           # Serveur FastAPI
-│   ├── video_streamer.py   # Capture vidéo + OSD
+│   ├── server.py           # Serveur FastAPI + WebSockets
+│   ├── video_streamer.py   # Capture vidéo + pipeline OSD
 │   ├── sensor_manager.py   # Gestion des capteurs
-│   ├── gamepad_manager.py  # Gestion manette
-│   ├── gamepad_profiles.py # Profils manette
-│   ├── gamepad_controller.py # Actions manette → ROV
-│   └── config_parser.py    # Lecture config.txt
+│   ├── imu_manager.py      # Fusion IMU (ESP32 + filtres)
+│   ├── motor_manager.py    # Contrôle des propulseurs
+│   ├── motor_mixer.py      # Mixage 6DOF → PWM
+│   ├── gamepad_manager.py  # Gestion manette (profils, axes, combos)
+│   ├── gamepad_profiles.py # CRUD profils manette
+│   ├── gamepad_controller.py# Actions manette → ROV
+│   ├── camera_detector.py  # Détection caméras USB
+│   ├── camera_controls.py  # Contrôles caméra (exposition, balance)
+│   ├── goggle_manager.py   # Gestion mode lunettes FPV/VR
+│   ├── i2c_controller.py   # Communication I2C avec ESP32-S3
+│   ├── scenario_manager.py # Gestion des scénarios de mission
+│   └── config_parser.py    # Lecture/écriture config.txt
 ├── frontend/
-│   ├── index.html          # Interface principale
+│   ├── index.html          # Interface principale (SPA)
+│   ├── simulator3d.html    # Sub-Simulator (simulation 3D)
+│   ├── mapping3d.html      # Visualiseur 3D manette
 │   ├── css/
 │   │   ├── style.css       # Styles principaux
-│   │   └── gamepad.css     # Styles config manette
+│   │   ├── gamepad.css     # Styles config manette
+│   │   ├── simulator3d.css # Styles Sub-Simulator
+│   │   └── scene3d.css     # Styles Config Scène 3D
 │   └── js/
-│       ├── app.js          # Navigation
-│       ├── telemetry.js    # WebSockets
-│       ├── gamepad.js      # Manette
-│       ├── gamepad_config.js # Configuration manette
-│       ├── gamepad_visual.js # SVG manette
+│       ├── app.js          # Navigation par tuiles SPA
+│       ├── telemetry.js    # WebSockets + rendu OSD canvas
+│       ├── rov3d.js        # Module Three.js (modèle 3D OSD)
+│       ├── osd_config.js   # Configuration OSD
+│       ├── osd_layout.js   # Éditeur Drag & Drop OSD
+│       ├── simulator3d.js  # Sub-Simulator (physique 6DOF)
+│       ├── scene_config.js # IHM Config Scène 3D
+│       ├── mapping3d.js    # Scène 3D manette
+│       ├── gamepad.js      # Manette (polling, profils, failsafe)
+│       ├── gamepad_config.js# Éditeur mapping manette
+│       ├── gamepad_visual.js# SVG manette
 │       ├── gamepad_test.js # Test manette
-│       └── action_status.js # État des fonctions
-└── profiles/
-    └── manette_profiles.json # Profils manette
+│       ├── gamepad_nav.js  # Navigation par manette
+│       ├── goggle.js       # Mode lunettes FPV/VR
+│       ├── simulation.js   # Mode simulation cockpit
+│       ├── camera_config.js# Configuration caméras
+│       ├── wifi.js         # Gestion WiFi
+│       └── action_status.js# État des fonctions
+├── firmware/esp32_imu/     # Firmware ESP32-S3 (IMU + PWM)
+├── profiles/
+│   └── manette_profiles.json# Profils manette
+├── scenarios/              # Scénarios de mission
+├── recordings/             # Photos et vidéos capturées
+├── static/models/          # Modèles 3D (.glb)
+│   └── scene/              # Modèles scène sous-marine
+└── logs/                   # Journaux d'exécution
 ```
 
 ### Architecture en couches
@@ -93,7 +130,7 @@ cockpit-lite-rov/
 
 ## 📊 État des Fonctions
 
-> **Bilan actuel :** ✅ 22 opérationnelles · 🛠️ 1 en cours · ⏳ 25 planifiées
+> **Bilan actuel :** ✅ 9 opérationnelles · 🛠️ 1 en cours · ⏳ 18+ planifiées
 
 ### ✅ IMPLEMENTED (Opérationnelles)
 
@@ -142,7 +179,7 @@ cockpit-lite-rov/
 ### 🛠️ IN_PROGRESS (En développement)
 | Fonction | Description |
 |----------|-------------|
-| `light_toggle` | Allumer/Éteindre l'éclairage LED |
+| `light_toggle` | Allumer/Éteindre l'éclairage LED (fonctionnel dans le Sub-Simulator) |
 
 ### ⏳ PLANNED (Planifiées)
 | Catégorie | Fonctions | Description |
@@ -155,6 +192,35 @@ cockpit-lite-rov/
 | **Capteurs** | `imu_tare` | Recalibrage zéro IMU / Tare |
 | **Stabilisation** | `depth_hold`, `heading_hold` | Maintien profondeur / cap |
 | **Macros** | `macro_180`, `macro_surface`, `macro_hold` | Séquences automatisées |
+
+> **Note :** Les mouvements analogiques (surge, sway, heave, yaw, roll, pitch) sont gérés directement par le `gamepad_controller` + `motor_mixer` (mixage 6DOF → 8 moteurs PWM via ESP32-S3) et n'apparaissent pas dans l'ActionDispatcher.
+
+---
+
+## 🎮 Fonctionnalités Avancées
+
+### Sub-Simulator (Simulation 3D Sous-Marine)
+Simulateur 3D complet (`simulator3d.html`) avec :
+- Physique hydrodynamique 6DOF avec inertie
+- Topographie "Blue Hole" : plateau corallien + fosse abyssale
+- Environnement procédural : surface d'eau (Gerstner), algues, coraux, bancs de poissons, créatures abyssales
+- Projecteurs LED orientables avec intensité configurable
+- Caméra FPV / orbitale avec suivi du ROV
+- Collisions surface/fond/parois
+- OSD superposé à la scène 3D
+- Configuration via IHM (Config Scène 3D) avec persistance JSON
+
+### Éditeur OSD Drag & Drop
+Repositionnement visuel des 12 éléments OSD par glisser-déposer, avec 2 profils (écran / lunettes AR) et auto-save.
+
+### Sécurité Failsafe Manette
+Watchdog gamepad : arrêt moteurs automatique + alerte OSD clignotante en cas de perte de connexion, restauration automatique au retour.
+
+### Mode Lunettes FPV/VR
+Bascule stéréoscopique avec layout OSD dédié, détection multi-écrans, et profil manette adapté.
+
+### Configuration Scène 3D
+IHM complète pour gérer les objets de la scène sous-marine : upload de modèles GLB, réglage de la faune/flore/décor, comportements (nageant, curieux, mammifère), et paramètres environnementaux.
 
 ---
 
@@ -184,37 +250,45 @@ cockpit-lite-rov/
 - Raspberry Pi OS Lite 64-bit
 - Python 3.11+
 - Caméra USB compatible
-- ADXL345 (I2C)
+- ESP32-S3 (IMU I2C + PWM, voir `I2C_ESP32_PROTOCOL.md`)
 
 ### Installation
 ```bash
-# Cloner le projet
-cd /home/bob
-git clone [url-du-depot] cockpit-lite-rov
-cd cockpit-lite-rov
+# 1. Installation des dépendances système obligatoires
+sudo apt update && sudo apt install -y git python3-pip python3-venv python3-dev build-essential libgl1-mesa-glx libglib2.0-0
 
-# Créer l'environnement virtuel
+# 2. Récupération du projet
+cd /home/bob
+git clone https://github.com/Bobar2019/BOBROV.git cockpit-lite-rov
+cd cockpit-lite-rov
+git checkout Sub-Simulator_VISU3DV3_SURF3
+
+# 3. Préparation du dossier de logs et de l'environnement virtuel
+mkdir -p logs
 python3 -m venv venv
 source venv/bin/activate
-
-# Installer les dépendances
+pip install --upgrade pip
 pip install -r requirements.txt
 
-# Configurer le service systemd (démarrage auto)
+# 4. Activation et démarrage du service systemd
 sudo cp bob-rov.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl enable bob-rov.service
+sudo systemctl start bob-rov.service
 ```
 
-### Démarrage
+### Démarrage manuel
 ```bash
-# Manuel
 cd /home/bob/cockpit-lite-rov
 source venv/bin/activate
 python main.py
+```
 
-# Service
+### Service systemd
+```bash
 sudo systemctl start bob-rov.service
 sudo systemctl status bob-rov.service
+journalctl -u bob-rov.service -f
 ```
 
 ### Accès
@@ -257,10 +331,20 @@ curl http://172.22.22.142:8080/api/actions/log?limit=20
 
 ## 🚀 Prochaines Étapes
 
-1. **Éclairage LED** → Finaliser `light_toggle` et `light_brightness`
+1. **Éclairage LED** → Finaliser `light_toggle` et `light_brightness` (backend réel)
 2. **Maintien de profondeur / cap** → Implémenter `depth_hold` et `heading_hold` avec les données IMU
 3. **Pince** → Implémenter `grip_open` et `grip_close`
 4. **Recalibrage IMU** → Implémenter `imu_tare` (remise à zéro de l'orientation)
 5. **Macros** → Créer l'interface de programmation de macros
-6. **Mode FPV** → Implémenter `fpv_toggle` (bascule vue externe / vue caméra FPV)
+6. **Mode FPV** → Implémenter `fpv_toggle` (bascule vue externe / vue caméra FPV réelle)
 7. **Inclinaison caméra** → Servo/stepper pour le tilt caméra
+
+---
+
+## 📚 Documentation Complémentaire
+
+| Document | Description |
+|----------|-------------|
+| `README.md` | Documentation utilisateur complète |
+| `CDC.md` | Cahier des charges technique et architecture système |
+| `I2C_ESP32_PROTOCOL.md` | Protocole I2C complet RPi 5 ↔ ESP32-S3 |

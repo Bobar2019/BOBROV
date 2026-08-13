@@ -12,8 +12,9 @@ build/
 venv/
 .env
 
-# Logs
-logs/
+# Logs (contenu ignoré, mais .gitkeep suivi pour garantir le dossier)
+logs/*
+!logs/.gitkeep
 
 # Enregistrements vidéo/photo
 recordings/

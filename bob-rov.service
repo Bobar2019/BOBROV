@@ -1,38 +1,14 @@
 [Unit]
 Description=BOB-ROV Service - Cockpit-Lite ROV Controller
-Documentation=https://github.com/bob/cockpit-lite-rov
-After=network-online.target
-Wants=network-online.target
+After=network.target
 
 [Service]
 Type=simple
 User=bob
-Group=bob
 WorkingDirectory=/home/bob/cockpit-lite-rov
-Environment="PATH=/home/bob/cockpit-lite-rov/venv/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONUNBUFFERED=1"
-ExecStart=/home/bob/cockpit-lite-rov/venv/bin/python /home/bob/cockpit-lite-rov/main.py --port 8080 --host 0.0.0.0
+ExecStart=/home/bob/cockpit-lite-rov/venv/bin/python main.py
 Restart=always
-RestartSec=5
-TimeoutStopSec=10
-KillSignal=SIGTERM
-SendSIGKill=yes
-
-# Logs vers fichiers
-StandardOutput=append:/home/bob/cockpit-lite-rov/logs/rov.log
-StandardError=append:/home/bob/cockpit-lite-rov/logs/rov-error.log
-
-# Identification syslog
-SyslogIdentifier=bob-rov
-
-# Permissions et sécurité (système embarqué — accès devices requis)
-NoNewPrivileges=yes
-
-# Accès aux groupes de périphériques (caméras V4L2, I2C)
-SupplementaryGroups=video i2c
-
-# Redémarrage conditionnel (pas en cas de stop volontaire code 0)
-RestartPreventExitStatus=0
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
