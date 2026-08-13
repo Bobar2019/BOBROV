@@ -1,6 +1,6 @@
 # BOB-ROV — Système de Contrôle pour ROV
 
-**Version :** 1.0.0  
+**Version :** 2.0.0  
 **Plateforme :** Raspberry Pi 5  
 **Auteur :** Didier Dero  
 **Date :** Août 2026  
@@ -24,9 +24,10 @@ BOB-ROV est un système de contrôle embarqué pour sous-marin téléguidé (ROV
 ### Stack
 - **Backend** : Python — FastAPI + WebSockets + OpenCV
 - **Frontend** : HTML5 + CSS3 + JavaScript Vanilla + Three.js
-- **Rendu 3D** : Three.js v0.170 (via CDN unpkg, importmap ES modules)
-- **Base de données** : Fichiers JSON (profils, configuration)
+- **Rendu 3D** : Three.js v0.160 (via CDN jsdelivr, importmap ES modules)
+- **Base de données** : Fichiers JSON (profils, configuration, scènes 3D, layouts OSD)
 - **Communication** : REST + WebSockets (temps réel)
+- **Firmware** : ESP32-S3 (IMU 6 axes + contrôle moteurs PWM via I2C)
 
 ### Arborescence
 ```
@@ -56,34 +57,44 @@ cockpit-lite-rov/
 │   └── config_parser.py     # Lecture/écriture config.txt
 ├── frontend/
 │   ├── index.html           # Interface principale (SPA par tuiles)
+│   ├── simulator3d.html     # Sub-Simulator (simulation 3D sous-marine)
 │   ├── mapping3d.html       # Visualiseur 3D manette (scène complète)
 │   ├── css/
 │   │   ├── style.css        # Styles principaux
 │   │   ├── gamepad.css      # Styles config manette
 │   │   ├── gamepad-nav.css  # Navigation gamepad UI
-│   │   └── goggle.css       # Styles mode lunettes FPV
+│   │   ├── goggle.css       # Styles mode lunettes FPV
+│   │   ├── simulator3d.css  # Styles Sub-Simulator
+│   │   └── scene3d.css      # Styles Config Scène 3D
 │   └── js/
 │       ├── app.js           # Navigation par tuiles SPA
 │       ├── telemetry.js     # WebSockets + rendu OSD canvas
 │       ├── rov3d.js         # Module ES Three.js (modèle 3D filaire OSD)
 │       ├── osd_config.js    # Configuration OSD (opacités, positions, visibilité)
+│       ├── osd_layout.js    # Éditeur Drag & Drop des positions OSD
 │       ├── gamepad.js       # Manette (polling, profils, combos, test mode)
 │       ├── gamepad_config.js# Éditeur de mapping manette
 │       ├── gamepad_visual.js# Visualisation SVG manette
 │       ├── gamepad_test.js  # Test manette en direct
 │       ├── gamepad_nav.js   # Navigation interface par manette
+│       ├── simulator3d.js   # Sub-Simulator (moteur 3D, physique 6DOF, faune/flore)
+│       ├── scene_config.js  # Configuration IHM Scène 3D (modèles GLB, faune, décor)
 │       ├── mapping3d.js     # Scène 3D complète (test manette avancé)
-│       ├── simulation.js    # Mode simulation
+│       ├── simulation.js    # Mode simulation (coté cockpit)
 │       ├── camera_config.js # Configuration caméras
 │       ├── wifi.js          # Gestion WiFi
 │       ├── goggle.js        # Mode lunettes FPV/VR
 │       └── action_status.js # État des fonctions
-├── firmware/esp32_imu/      # Firmware ESP32-S3 (IMU I2C)
+├── firmware/esp32_imu/      # Firmware ESP32-S3 (IMU I2C + PWM)
 ├── profiles/
 │   └── manette_profiles.json# Profils manette (Standard, Plongée, etc.)
 ├── scenarios/               # Scénarios de mission
 ├── recordings/              # Photos et vidéos capturées
-├── static/models/           # Modèles 3D (.glb)
+├── static/models/           # Modèles 3D (.glb) + textures
+│   └── scene/               # Modèles 3D de la scène sous-marine
+├── scene_3d_config.json     # Configuration de la scène 3D (faune, flore, décor)
+├── osd_layouts.json         # Positions OSD sauvegardées (profils écran/lunettes)
+├── I2C_ESP32_PROTOCOL.md    # Documentation protocole I2C ESP32-S3
 └── logs/                    # Journaux d'exécution
 ```
 
@@ -129,16 +140,20 @@ L'OSD est rendu côté navigateur sur un canvas HTML5 haute résolution, superpo
 - Découplage complet entre la taille d'affichage CSS et la résolution interne du canvas.
 
 #### Éléments OSD configurables
-| Élément | Affichage | Opacité indépendante |
-|---------|-----------|:---:|
-| Horizon artificiel | Ligne d'horizon + graduations pitch/roll | ✅ |
-| Profondeur | Jauge verticale + valeur | ✅ |
-| Température | Indicateur + valeur | ✅ |
-| Cap (boussole) | Barre horizontale + valeur | ✅ |
-| Batterie | Indicateur + pourcentage | ✅ |
-| Propulseurs | Barres de poussée | ✅ |
-| **Modèle 3D (Rov3D)** | Wireframe 3D du ROV | ✅ |
-| FPS | Compteur temps réel | ✅ |
+| Élément | Affichage | Opacité indépendante | Déplaçable (D&D) |
+|---------|-----------|:---:|:---:|
+| Horizon artificiel | Ligne d'horizon + graduations pitch/roll | ✅ | ✅ |
+| Profondeur | Jauge verticale + valeur | ✅ | ✅ |
+| Température | Indicateur + valeur | ✅ | ✅ |
+| Cap (boussole) | Barre horizontale + valeur | ✅ | ✅ |
+| Batterie | Indicateur + pourcentage | ✅ | ✅ |
+| Propulseurs | Barres de poussée (8 moteurs) | ✅ | ✅ |
+| **Modèle 3D (Rov3D)** | Wireframe 3D du ROV | ✅ | ✅ |
+| FPS | Compteur temps réel | ✅ | ✅ |
+| Horloge | Heure système | ✅ | ✅ |
+| Armé/Désarmé | Badge état ROV | ✅ | ✅ |
+| Batterie manette | Indicateur niveau gamepad | ✅ | ✅ |
+| Mode d'affichage | Badge écran/lunettes | ✅ | ✅ |
 
 Chaque élément dispose d'un réglage d'opacité indépendant, en plus d'une opacité globale.
 
@@ -200,34 +215,107 @@ Système complet de configuration de manette PlayStation (DualShock 4 / DualSens
 - Visualiseur SVG interactif de la manette.
 - Polling continu permanent (auto-détection sans limite de temps).
 
+### Éditeur de Mise en Page (Drag & Drop)
+
+Un éditeur visuel permet de repositionner tous les éléments OSD par glisser-déposer directement sur le flux vidéo.
+
+#### Fonctionnalités
+- **12 éléments déplaçables** : horizon, profondeur, température, boussole, batterie, propulseurs, Rov3D, FPS, horloge, armé/désarmé, batterie manette, mode d'affichage.
+- **Auto-save** : sauvegarde automatique dans `osd_layouts.json` avec debounce (500 ms).
+- **2 profils de mise en page** : `screen` (écran classique) et `goggles` (lunettes AR/FPV), indépendants.
+- **Persistance JSON** : les positions sont sauvegardées en pourcentages (0–100) avec flush disque immédiat.
+- Les positions sont restaurées automatiquement au chargement de l'interface.
+
+### Sécurité Manette (Failsafe)
+
+Un système de watchdog matériel protège le ROV en cas de perte de connexion de la manette.
+
+#### Comportement
+- **Watchdog** : surveillance continue de la connexion gamepad via l'API HTML5 Gamepad.
+- **Seuil de déconnexion** : après une durée configurable sans trame, la manette est considérée comme perdue.
+- **Arrêt moteurs** : tous les axes DOF sont ramenés à 0 et une trame de neutre (PWM 307) est envoyée sur tous les canaux moteurs.
+- **Alerte OSD** : un badge clignotant `⚠ FAILSAFE` apparaît sur le flux vidéo.
+- **Restauration automatique** : dès que la manette est reconnectée, le contrôle est restauré sans intervention manuelle.
+
+### Sub-Simulator (Simulation 3D Sous-Marine)
+
+Un simulateur 3D complet accessible via `simulator3d.html`, permettant l'entraînement à la plongée dans un environnement sous-marin procédural.
+
+#### Moteur de simulation
+- **Physique 6DOF** : simulation hydrodynamique avec inertie, accélération rotationnelle et translationnelle.
+- **Topographie "Blue Hole"** : plateau corallien peu profond + tombant vers une fosse abyssale.
+- **Collisions** : détection de collision avec la surface (plafond Y=0), le fond, et les parois latérales avec cooldown d'impact (300 ms).
+- **Projecteurs LED** : spots lumineux orientables (`projecteur.glb`) avec intensité et tilt configurables.
+- **Caméra FPV** : bascule entre vue extérieure (OrbitControls avec suivi du ROV) et vue FPV (caméra embarquée).
+
+#### Environnement sous-marin procédural
+| Élément | Technologie | Paramètres |
+|---------|-------------|------------|
+| Surface d'eau | Shader Gerstner + caustiques + rayons lumineux (god rays) | Hauteur, vitesse, intensité |
+| Algues | InstancedMesh procédural (500 touffes max) | Densité, longueur, ondulation |
+| Coraux | 4 types InstancedMesh sur le plateau récifal | Densité par type |
+| Bancs de poissons | InstancedMesh + IA de fuite (500 poissons max, 8 bancs) | Nombre, vitesse, distance de fuite |
+| Créatures abyssales | InstancedMesh dans la fosse | Densité |
+| Terrain | Heightmap procédurale avec relief configurable | Hauteur du relief |
+| Parois | Texturées avec tiling configurable | Activable/désactivable |
+
+#### Configuration IHM (Config Scène 3D)
+- Tableau éditable des objets 3D (nom, type, modèle GLB, taille réelle, nombre, comportement).
+- Types d'objets : `faune`, `flore`, `objet`, `mamifère`.
+- Comportements : `nageant`, `curieux`, `fixe`, `ancre_ondule`, `static`, `neant`.
+- Upload de nouveaux modèles GLB avec aperçu miniature.
+- Réglages environnement : courant, densité de vie, vagues, caustiques, god rays.
+- Snapshots de configuration et notifications toast.
+- Persistance dans `scene_3d_config.json`.
+
 ### Mode Lunettes FPV / VR
 
 Bascule entre vue écran classique et mode stéréoscopique lunettes FPV via le gestionnaire `goggle_manager.py`.
 
+#### Fonctionnalités
+- Activation/désactivation depuis le Cockpit ou raccourci manette.
+- Détection automatique des sorties vidéo multiples (HDMI, etc.).
+- Listener `fullscreenchange` pour bascule automatique en plein écran.
+- Profil manette dédié avec mapping adapté au mode lunettes.
+- Layout OSD indépendant (`goggles` dans `osd_layouts.json`).
+- Raccourcis clavier/manette pour basculer entre les modes.
+
 ### Enregistrement Vidéo / Photo
 
-- Capture vidéo avec OSD incruster dans le pipeline (via OpenCV).
-- Photos avec ou sans OSD.
-- Stockage dans `recordings/`.
+- Capture vidéo avec OSD incrusté dans le pipeline (via OpenCV).
+- Photos avec ou sans OSD, par caméra.
+- Stockage dans `recordings/` avec nommage horodaté (`PHOTO_YYYY-MM-DD_HH-MM-SS.jpg`, `VIDEO_...mp4`).
+
+### Dashboard
+
+- Bouton **Reboot** système pour redémarrer le Raspberry Pi à distance depuis l'interface web.
+- Statistiques système (CPU, RAM, température SoC, espace disque).
 
 ---
 
 ## État des Fonctions
 
-> **Bilan :** ✅ 22 opérationnelles · 🛠️ 1 en cours · ⏳ 25 planifiées
+> **Bilan :** ✅ 9 opérationnelles · 🛠️ 1 en cours · ⏳ 18+ planifiées
 
 ### IMPLEMENTED (Opérationnelles)
 - **Capture** : `photo`, `video_toggle`, `video_osd_toggle`, `video_no_osd_toggle`, `photo_cam1_osd`, `photo_cam1_no_osd`, `photo_cam2_osd`, `photo_cam2_no_osd`
-- **Mouvements** : `forward_backward`, `vertical`, `lateral`, `turn`, `ascent`, `descent`, `roll`, `pitch`
-- **Contrôle** : `arm`, `disarm`, `emergency_stop`, `reset_position`
-- **Stabilisation** : `autolevel_toggle`
-- **Capteurs** : `read_sensors`
+- **Stabilisation** : `autolevel_toggle` — Bascule mode Auto-Pilote (PASSIF / AUTO-ROLL / AUTO-FULL via ESP32-S3)
+- **Capteurs** : `read_sensors` — Lecture complète (profondeur, température, pression, cap, roulis, tangage)
+
+> Les mouvements analogiques (`forward_backward`, `vertical`, `lateral`, `turn`, `ascent`, `descent`, `roll`, `pitch`) sont pilotés directement par le gamepad controller et le mixeur 6DOF, sans passer par l'ActionDispatcher.
 
 ### IN_PROGRESS
-- `light_toggle` — Éclairage LED
+- `light_toggle` — Éclairage LED (fonctionnel dans le Sub-Simulator)
 
 ### PLANNED
-- Commandes directionnelles discrètes, pince, réglage intensité LED, inclinaison caméra, maintien profondeur/cap, macros, mode FPV, recalibrage IMU.
+- Commandes directionnelles discrètes (`move_forward`, `move_backward`, `turn_left`, `turn_right`, etc.)
+- Pince (`grip_open`, `grip_close`)
+- Réglage intensité LED (`light_brightness`, `light_up`, `light_down`)
+- Inclinaison caméra (`camera_tilt_up`, `camera_tilt_down`)
+- Maintien profondeur/cap (`depth_hold`, `heading_hold`)
+- Macros (`macro_180`, `macro_surface`, `macro_hold`)
+- Mode FPV (`fpv_toggle`)
+- Recalibrage IMU (`imu_tare`)
 
 ---
 
@@ -238,7 +326,8 @@ Bascule entre vue écran classique et mode stéréoscopique lunettes FPV via le 
 - Raspberry Pi OS Lite 64-bit
 - Python 3.11+
 - Caméra USB compatible
-- IMU I2C (ADXL345 / MPU6050 / QMI8658 via ESP32-S3)
+- ESP32-S3 (firmware IMU + contrôle PWM, voir `I2C_ESP32_PROTOCOL.md`)
+- IMU supportée : ADXL345 / MPU6050 / QMI8658 (via firmware ESP32-S3)
 
 ### Installation
 ```bash
@@ -287,10 +376,20 @@ sudo systemctl status bob-rov.service
 
 ## Prochaines Étapes
 
-1. **Éclairage LED** — Finaliser `light_toggle` et `light_brightness`
+1. **Éclairage LED** — Finaliser `light_toggle` et `light_brightness` (backend réel)
 2. **Maintien de profondeur / cap** — Implémenter `depth_hold` et `heading_hold`
 3. **Pince** — Implémenter `grip_open` et `grip_close`
 4. **Recalibrage IMU** — Implémenter `imu_tare`
 5. **Macros** — Créer l'interface de programmation de macros
-6. **Mode FPV** — Implémenter `fpv_toggle`
+6. **Mode FPV** — Implémenter `fpv_toggle` (bascule vue externe / vue caméra FPV réelle)
 7. **Inclinaison caméra** — Servo/stepper pour le tilt caméra
+
+---
+
+## Documentation Complémentaire
+
+| Document | Description |
+|----------|-------------|
+| `BOBROV.md` | Documentation fonctionnelle détaillée du projet |
+| `CDC.md` | Cahier des charges technique et architecture système |
+| `I2C_ESP32_PROTOCOL.md` | Protocole I2C complet entre RPi 5 et ESP32-S3 (registres, canaux PWM, mixage 6DOF) |
