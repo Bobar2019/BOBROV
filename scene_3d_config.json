@@ -154,6 +154,7 @@
         "intensity": 0.26
       }
     },
-    "compact_zone": 85
+    "compact_zone": 85,
+    "water_transparency": 80
   }
 }

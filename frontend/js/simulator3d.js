@@ -1156,6 +1156,11 @@ async function loadEnvironmentConfig() {
                 envState.godraysIntensity = env.surface.godrays.intensity ?? 0.5;
             }
         }
+        // Transparence de l'eau → visibilité / brouillard FogExp2
+        if (env.water_transparency !== undefined) {
+            diveState.visibility = Math.max(1, env.water_transparency);
+            scene.fog = new THREE.FogExp2(0x0b1020, 1.7 / diveState.visibility);
+        }
         // Construire/reconstruire terrain et parois selon la config JSON
         buildWalls();
         buildTerrain();
@@ -3514,7 +3519,11 @@ function buildGodRays() {
 // ===========================================================================
 function updateDepthAmbience() {
     const depthNow = Math.max(0, -posWorld.y);
-    const f = Math.exp(-Math.max(0, depthNow - REEF_DEPTH) / SUN_FADE_DEPTH);
+    // L'extinction solaire suit la transparence de l'eau :
+    // water_transparency=80m → lumière encore à 88% à -30m, 69% à -50m
+    // water_transparency=15m → lumière quasi éteinte à -30m (eaux troubles)
+    const sunFadeDepth = Math.max(5, diveState.visibility);
+    const f = Math.exp(-Math.max(0, depthNow - REEF_DEPTH) / sunFadeDepth);
     if (Math.abs(f - _lastSunF) < 0.002 && envMats.length === _lastEnvCount) return;
     _lastSunF = f;
     _lastEnvCount = envMats.length;

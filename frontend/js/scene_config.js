@@ -499,6 +499,7 @@ const SceneConfig = (() => {
             godrays: { enabled: true, intensity: 0.5 },
         },
         compact_zone: 0,
+        water_transparency: 40,
     };
 
     /** Garantit que la section environment existe dans la config */
@@ -521,6 +522,7 @@ const SceneConfig = (() => {
         if (!env.surface.godrays) env.surface.godrays = JSON.parse(JSON.stringify(DEFAULT_ENV.surface.godrays));
         if (env.current === undefined) env.current = DEFAULT_ENV.current;
         if (env.compact_zone === undefined) env.compact_zone = DEFAULT_ENV.compact_zone;
+        if (env.water_transparency === undefined) env.water_transparency = DEFAULT_ENV.water_transparency;
     }
 
     /** Bind un slider : lit la valeur, met à jour le label, sauvegarde au changement */
@@ -623,6 +625,12 @@ const SceneConfig = (() => {
             () => env.terrain.biomes.blend_smoothness,
             v => { env.terrain.biomes.blend_smoothness = v; },
             v => v.toFixed(1) + ' m');
+
+        // Transparence de l'eau (visibilité / brouillard)
+        _bindEnvSlider('env-water-transparency',
+            () => env.water_transparency,
+            v => { env.water_transparency = v; },
+            v => v + ' m');
 
         // Parois
         _bindEnvCheck('env-walls-enabled', () => env.walls.enabled, v => { env.walls.enabled = v; });
