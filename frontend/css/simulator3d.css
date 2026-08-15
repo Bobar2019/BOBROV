@@ -150,7 +150,23 @@ canvas { display: block; }
 #sim-motors-panel { top: 300px; right: 14px; width: 246px; }
 #sim-dof-panel { bottom: 14px; left: 14px; width: 220px; }
 #sim-telemetry-panel { bottom: 14px; right: 14px; width: 220px; }
-#sim-help { bottom: 14px; right: 250px; font-size: 11px; color: var(--muted); max-width: 230px; line-height: 1.5; }
+#sim-help { bottom: 14px; right: 480px; font-size: 11px; color: var(--muted); max-width: 230px; line-height: 1.5; }
+#sim-radar-panel { bottom: 14px; right: 248px; width: 216px; }
+
+/* Mini-radar canvas & info */
+#sim-radar-canvas {
+    border-radius: 6px;
+    background: #060d1a;
+    border: 1px solid rgba(53, 208, 186, 0.2);
+    display: block;
+    margin-bottom: 6px;
+}
+#sim-radar-info {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: monospace;
+    white-space: nowrap;
+}
 
 /* === SLIDERS & CONTRÔLES === */
 .phys-row { margin-bottom: 11px; }

@@ -203,11 +203,12 @@ current += vel
 - Scale = `real_size_m / maxDimension × random(scale_min, scale_max)`
 - Animations GLB lancées automatiquement (sauf `behavior=static`)
 
-### 7.2 Détection de heading (normales de surface)
-- Modèle allongé sur **X** : rotation ±90° selon vertices +X vs -X
-- Modèle allongé sur **Z** : normale du vertex le plus en avant (maxZ) ; si `normAtMaxZ < -0.1` → rotation 180°
-- Fallback : normales aux extrêmes Z
-- **Ne pas utiliser le comptage de vertices** (échoue sur les poissons à cause du volume de la nageoire caudale)
+### 7.2 Détection de heading (moyenne pondérée des normales)
+- Vertices séparés en **moitié avant** (Z > centre) et **arrière** (Z < centre)
+- Moyenne de la composante Z des normales de chaque moitié
+- Si `frontAvg < -0.05` ET `backAvg > 0.05` → modèle face à -Z → rotation 180°
+- Modèle allongé sur X : rotation ±90° selon vertices +X vs -X
+- **Robuste** : une nageoire à normale atypique ne fausse pas la moyenne de centaines de vertices
 
 ### 7.3 Zones de placement (`positionInZone`)
 | Zone | Distribution Y |

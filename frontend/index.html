@@ -998,31 +998,27 @@
 
                     <!-- Terrain -->
                     <div class="s3d-env-group">
-                        <h3>🏔️ Terrain <span class="s3d-info" data-tip="Relief sous-marin : plateau corallien peu profond + fosse abyssale" tabindex="0">ⓘ</span></h3>
+                        <h3>🏔️ Terrain <span class="s3d-info" data-tip="Zones de terrain en % : pentes tangentes de la surface au fond" tabindex="0">ⓘ</span></h3>
                         <label class="s3d-chk-row"><input type="checkbox" id="env-terrain-enabled"> Relief activé</label>
+                        <div class="s3d-env-row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.07);padding-top:6px;">
+                            <div class="s3d-env-head"><label>🏖️ Plage — Étendue <span class="s3d-info" data-tip="Largeur de la plage en % de la largeur du bassin" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-beach-extent-val">10 %</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-beach-extent" min="1" max="40" step="1" value="10">
+                        </div>
                         <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>Hauteur relief <span class="s3d-info" data-tip="Amplitude du relief en mètres (0 = fond plat)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-terrain-height-val">0.9</span></div>
-                            <input type="range" class="s3d-env-slider" id="env-terrain-height" min="0" max="2" step="0.1" value="0.9">
+                            <div class="s3d-env-head"><label>🏖️ Plage — Profondeur <span class="s3d-info" data-tip="Profondeur max de la plage en % de la profondeur totale" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-beach-depth-val">5 %</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-beach-depth" min="1" max="30" step="1" value="5">
                         </div>
                         <div class="s3d-env-row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.07);padding-top:6px;">
-                            <div class="s3d-env-head"><label>🏖️ Plafond plage (sable) <span class="s3d-info" data-tip="Profondeur max de la zone sable blanc (0m = surface)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-biome-beach-val">-8 m</span></div>
-                            <input type="range" class="s3d-env-slider" id="env-biome-beach" min="-20" max="-1" step="1" value="-8">
+                            <div class="s3d-env-head"><label>🪸 Récif — Étendue <span class="s3d-info" data-tip="Largeur du récif en % de la largeur du bassin" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-reef-extent-val">20 %</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-reef-extent" min="5" max="60" step="1" value="20">
                         </div>
                         <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>🪸 Plafond récif (roche) <span class="s3d-info" data-tip="Profondeur max de la zone corail/roche" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-biome-reef-val">-25 m</span></div>
-                            <input type="range" class="s3d-env-slider" id="env-biome-reef" min="-60" max="-5" step="1" value="-25">
-                        </div>
-                        <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>🕳️ Seuil abysse (limon) <span class="s3d-info" data-tip="Profondeur à partir de laquelle le limon sombre apparaît" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-biome-abyss-val">-30 m</span></div>
-                            <input type="range" class="s3d-env-slider" id="env-biome-abyss" min="-100" max="-10" step="1" value="-30">
-                        </div>
-                        <div class="s3d-env-row">
-                            <div class="s3d-env-head"><label>🎨 Douceur transition <span class="s3d-info" data-tip="Largeur de la zone de fondu entre les textures (en mètres)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-biome-blend-val">3.0 m</span></div>
-                            <input type="range" class="s3d-env-slider" id="env-biome-blend" min="0.5" max="10" step="0.5" value="3.0">
+                            <div class="s3d-env-head"><label>🪸 Récif — Profondeur <span class="s3d-info" data-tip="Profondeur max du récif en % de la profondeur totale (cumulée avec la plage)" tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-reef-depth-val">20 %</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-reef-depth" min="5" max="80" step="1" value="20">
                         </div>
                         <div class="s3d-env-row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.07);padding-top:6px;">
-                            <div class="s3d-env-head"><label>💧 Transparence de l'eau <span class="s3d-info" data-tip="Distance de visibilité sous-marine en mètres (brouillard FogExp2). Augmenter pour voir plus loin en profondeur." tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-water-transparency-val">40 m</span></div>
-                            <input type="range" class="s3d-env-slider" id="env-water-transparency" min="1" max="100" step="1" value="40">
+                            <div class="s3d-env-head"><label>💧 Transparence de l'eau <span class="s3d-info" data-tip="Distance de visibilité sous-marine en mètres (brouillard FogExp2). Augmenter pour voir plus loin en profondeur." tabindex="0">ⓘ</span></label><span class="s3d-env-val" id="env-water-transparency-val">80 m</span></div>
+                            <input type="range" class="s3d-env-slider" id="env-water-transparency" min="1" max="100" step="1" value="80">
                         </div>
                     </div>
 

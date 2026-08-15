@@ -318,7 +318,10 @@ const SceneConfig = (() => {
                     // Auto-config pour la flore : fixe au sol avec ondulation
                     if (e.target.value === 'flore') {
                         _updateObject(idx, 'kinematic', 'ancre_ondule');
-                        _updateObject(idx, 'zone', 'sol');
+                        // Ne pas forcer la zone : l'utilisateur choisit (plage, recif, fond)
+                        if (!['plage', 'recif', 'fond', 'sol', 'abysse'].includes(obj.zone)) {
+                            _updateObject(idx, 'zone', 'recif');
+                        }
                         _renderObjects();
                     }
                     // Auto-config pour mammifère : nageant, pleine eau, curieux
@@ -374,13 +377,14 @@ const SceneConfig = (() => {
             const tdZone = document.createElement('td');
             tdZone.appendChild(_el('select', {
                 innerHTML: _buildOptions([
-                    { value: 'sol',           label: '🏔️ Sol' },
                     { value: 'plage',         label: '🏖️ Plage' },
+                    { value: 'recif',         label: '🪸 Récif' },
+                    { value: 'fond',          label: '⬇️ Fond' },
+                    { value: 'sol',           label: '🏔️ Sol (compat.)' },
                     { value: 'abysse',        label: '🕳️ Abysse' },
                     { value: 'multi_couches', label: '📊 Multi-couches' },
                     { value: 'pleine_eau',    label: '🌊 Pleine eau' },
-                    { value: 'surface',       label: '☀️ Surface' },
-                    { value: 'fond',          label: '⬇️ Fond (compat.)' }
+                    { value: 'surface',       label: '☀️ Surface' }
                 ], obj.zone),
                 onChange: (e) => _updateObject(idx, 'zone', e.target.value)
             }));
@@ -489,8 +493,8 @@ const SceneConfig = (() => {
             pikes: { enabled: true },
         },
         terrain: {
-            enabled: false, height: 0.9,
-            biomes: { beach_depth_max: -8.0, reef_depth_max: -25.0, abyss_depth_min: -30.0, blend_smoothness: 3.0 }
+            enabled: false,
+            zones: { beach_extent: 10, beach_depth_pct: 5, reef_extent: 20, reef_depth_pct: 20 }
         },
         walls: { enabled: false, tiling: 3.0 },
         surface: {
@@ -514,7 +518,7 @@ const SceneConfig = (() => {
         if (!env.abyss.creatures) env.abyss.creatures = JSON.parse(JSON.stringify(DEFAULT_ENV.abyss.creatures));
         if (!env.abyss.pikes) env.abyss.pikes = JSON.parse(JSON.stringify(DEFAULT_ENV.abyss.pikes));
         if (!env.terrain) env.terrain = JSON.parse(JSON.stringify(DEFAULT_ENV.terrain));
-        if (!env.terrain.biomes) env.terrain.biomes = JSON.parse(JSON.stringify(DEFAULT_ENV.terrain.biomes));
+        if (!env.terrain.zones) env.terrain.zones = JSON.parse(JSON.stringify(DEFAULT_ENV.terrain.zones));
         if (!env.walls) env.walls = JSON.parse(JSON.stringify(DEFAULT_ENV.walls));
         if (!env.surface) env.surface = JSON.parse(JSON.stringify(DEFAULT_ENV.surface));
         if (!env.surface.waves) env.surface.waves = JSON.parse(JSON.stringify(DEFAULT_ENV.surface.waves));
@@ -603,28 +607,24 @@ const SceneConfig = (() => {
 
         // Terrain
         _bindEnvCheck('env-terrain-enabled', () => env.terrain.enabled, v => { env.terrain.enabled = v; });
-        _bindEnvSlider('env-terrain-height',
-            () => env.terrain.height,
-            v => { env.terrain.height = v; },
-            v => v.toFixed(1));
 
-        // Biomes (paliers de textures de sol)
-        _bindEnvSlider('env-biome-beach',
-            () => env.terrain.biomes.beach_depth_max,
-            v => { env.terrain.biomes.beach_depth_max = v; },
-            v => v.toFixed(0) + ' m');
-        _bindEnvSlider('env-biome-reef',
-            () => env.terrain.biomes.reef_depth_max,
-            v => { env.terrain.biomes.reef_depth_max = v; },
-            v => v.toFixed(0) + ' m');
-        _bindEnvSlider('env-biome-abyss',
-            () => env.terrain.biomes.abyss_depth_min,
-            v => { env.terrain.biomes.abyss_depth_min = v; },
-            v => v.toFixed(0) + ' m');
-        _bindEnvSlider('env-biome-blend',
-            () => env.terrain.biomes.blend_smoothness,
-            v => { env.terrain.biomes.blend_smoothness = v; },
-            v => v.toFixed(1) + ' m');
+        // Zones de terrain (%)
+        _bindEnvSlider('env-beach-extent',
+            () => env.terrain.zones.beach_extent,
+            v => { env.terrain.zones.beach_extent = v; },
+            v => v.toFixed(0) + ' %');
+        _bindEnvSlider('env-beach-depth',
+            () => env.terrain.zones.beach_depth_pct,
+            v => { env.terrain.zones.beach_depth_pct = v; },
+            v => v.toFixed(0) + ' %');
+        _bindEnvSlider('env-reef-extent',
+            () => env.terrain.zones.reef_extent,
+            v => { env.terrain.zones.reef_extent = v; },
+            v => v.toFixed(0) + ' %');
+        _bindEnvSlider('env-reef-depth',
+            () => env.terrain.zones.reef_depth_pct,
+            v => { env.terrain.zones.reef_depth_pct = v; },
+            v => v.toFixed(0) + ' %');
 
         // Transparence de l'eau (visibilité / brouillard)
         _bindEnvSlider('env-water-transparency',

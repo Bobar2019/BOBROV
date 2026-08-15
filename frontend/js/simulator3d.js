@@ -51,18 +51,27 @@ let surfaceMesh = null, causticsMesh = null, godRaysGroup = null;
 const clock = new THREE.Clock();
 
 const physState = { inertia: 0.90, gain: 1.0, sens: 0.45, rollSens: 1.0, pitchSens: 1.0, speedBoost: 1.0 };
-const diveState = { depth: 30, visibility: 25, extent: 100, walls: true, terrain: false, reliefHeight: 5, abyssDepth: 15, abyssRadius: 45,
+const diveState = { depth: 30, visibility: 25, extent: 100, walls: true, terrain: false,
+                    beachExtent: 10, beachDepthPct: 5,    // plage : 10% largeur, 5% profondeur
+                    reefExtent: 20, reefDepthPct: 20,    // récif : 20% largeur, 20% profondeur
                     led: false, ledIntensity: 80, ledTilt: 12 };
 let FLOOR_Y = -30.0;
 let WALL_LIMIT = 9.5;
 let WALL_POS = 10.0;
 
-// --- Topographie "Blue Hole" : plateau corallien + fosse abyssale ---
-const REEF_DEPTH   = 20;     // m : profondeur du socle du plateau corallien
-const PIT_RADIUS_K = 0.45;   // rayon extérieur du tombant (fraction de WALL_POS)
+// --- Topographie par zones % (pentes tangentes smoothstep) ---
+// REEF_DEPTH devient dynamique (calculé depuis les % zones)
+let REEF_DEPTH = 20;    // m : profondeur du sommet du plateau récifal (mis à jour par applyBasinSize)
 const HEIGHT_MAX   = 10.0;   // amplitude max du relief (mètres)
 const TERRAIN_SLOPE_MAX = 1.7; // ~60° : pente = butée latérale
 const SUN_FADE_DEPTH = 11;   // m : profondeur d'extinction lumière après REEF_DEPTH
+
+/** Profondeur absolue du bas de la plage (en mètres, négatif) */
+function beachBottomDepth() { return diveState.depth * diveState.beachDepthPct / 100; }
+/** Profondeur absolue du bas du récif (en mètres, négatif) */
+function reefBottomDepth()  { return diveState.depth * (diveState.beachDepthPct + diveState.reefDepthPct) / 100; }
+/** Rayon de la zone fond/abysse depuis le centre (en mètres) */
+function fondZoneRadius()   { return WALL_POS * Math.max(0, 100 - diveState.beachExtent - diveState.reefExtent) / 100; }
 
 // Persistance localStorage des réglages
 const SETTINGS_KEY = 'subsim.settings';
@@ -135,11 +144,6 @@ let envState = {
     waves: true, waveHeight: 0.5, waveSpeed: 1.0,
     caustics: true, causticsIntensity: 0.7,
     godrays: true, godraysIntensity: 0.5,
-    // Biomes : paliers de profondeur pour textures de sol
-    biomeBeachMax: -8.0,    // plafond zone sable (m, négatif)
-    biomeReefMax: -25.0,    // plafond zone récif/roche
-    biomeAbyssMin: -30.0,   // seuil zone limon abyssal
-    biomeBlendSmooth: 3.0,  // largeur du fondu (m)
 };
 
 // Gamepad
@@ -418,68 +422,74 @@ function fbm2(x, z) {
 // La fosse descend TOUJOURS jusqu'à FLOOR_Y quelle que soit la profondeur du bassin.
 // Les plages remontent proportionnellement de la bordure (80% WALL_POS) jusqu'à la surface.
 function terrainHeightAt(x, z) {
-    // === Blue Hole : plateau corallien + fosse abyssale centrale + plages ===
-    const reliefAmp = diveState.reliefHeight;  // amplitude du relief (stalactites/stalagmites)
-    const abyssBelow = diveState.abyssDepth;   // profondeur supplémentaire de la fosse sous le plateau
-    const pitPct = diveState.abyssRadius / 100; // rayon fosse en % de WALL_POS
+    // === Terrain par zones % : pentes tangentes smoothstep ===
+    // Zones définies par distance au centre en % de WALL_POS :
+    //   centre ←─── fond ───→ ←─── récif ───→ ←─── plage ───→ bord
+    //   (FLOOR_Y)             (pente raide)    (pente douce)  (surface)
 
-    // Plateau à profondeur fixe (écosystème récifal : lumière + chaleur)
-    const plateauBase = Math.max(FLOOR_Y, -(REEF_DEPTH + reliefAmp));
-
-    // Relief corallien (bruit fractal)
-    const coral = Math.pow(fbm2(x * 0.35 + 7.3, z * 0.35 + 3.1), 1.6)
-                    * (diveState.terrain ? reliefAmp * 0.18 : 0)
-                + fbm2(x * 1.1 + 19.7, z * 1.1 + 5.9) * reliefAmp * 0.16;
-    const plateauY = Math.min(plateauBase + (diveState.terrain ? coral : 0), -1.0);
-
-    // ── Plage proportionnelle : pente douce de 80% à 100% de WALL_POS ──
-    // Le ratio est constant → la plage s'élargit automatiquement avec le bassin.
     const dist = Math.hypot(x, z);
-    const beachInner = WALL_POS * 0.82;  // début de la pente
-    const beachOuter = WALL_POS;         // bord du bassin (surface)
+    const distPct = dist / WALL_POS;  // 0 = centre, 1 = bord
 
-    // Bassin trop peu profond pour avoir une fosse : tout est plateau (ou plage)
-    if (FLOOR_Y >= -(REEF_DEPTH + reliefAmp) - 1) {
-        if (dist >= beachInner && beachOuter > beachInner) {
-            const beachT = THREE.MathUtils.smoothstep(dist, beachInner, beachOuter);
-            const beachS = beachT * beachT * (3 - 2 * beachT); // cubique douce
-            const surfaceY = CEIL_Y - 0.5;
-            return plateauY + (surfaceY - plateauY) * beachS;
-        }
-        return plateauY;
+    // Limites des zones en % de WALL_POS
+    const beachFrac = diveState.beachExtent / 100;  // ex: 0.10
+    const reefFrac  = diveState.reefExtent / 100;   // ex: 0.20
+    const beachInner = 1.0 - beachFrac;             // début plage (depuis le bord)
+    const reefInner  = Math.max(0, beachInner - reefFrac); // début récif
+
+    // Profondeurs absolues (négatif)
+    const surfaceY   = CEIL_Y - 0.5;                // ~surface
+    const beachBotY  = -beachBottomDepth();          // bas de la plage
+    const reefBotY   = -reefBottomDepth();           // bas du récif
+    const floorY     = FLOOR_Y;                      // fond du bassin
+
+    // Relief corallien : bruit fractal multi-échelle pour aspect rocheux
+    const reefNoise = diveState.terrain
+        ? (Math.pow(fbm2(x * 0.35 + 7.3, z * 0.35 + 3.1), 1.4) * 0.30          // gros blocs rocheux
+           + fbm2(x * 1.1 + 19.7, z * 1.1 + 5.9) * 0.22                          // détail moyen
+           + fbm2(x * 3.2 + 41.0, z * 3.2 + 13.7) * 0.08)                        // micro-relief rocheux
+           * Math.min(diveState.depth * 0.05, 4)
+        : 0;
+
+    // Bassin trop peu profond : pas de zones distinctes → pente simple
+    if (diveState.depth < 3) {
+        const t = THREE.MathUtils.smoothstep(distPct, 0, 1);
+        return floorY + (surfaceY - floorY) * t;
     }
-
-    // Fosse abyssale centrée
-    const R = WALL_POS * pitPct;
-    const rim = (fbm2(x * 0.05 + 31.4, z * 0.05 + 12.8) - 0.5) * R * 0.35;
-    const r = Math.hypot(x, z) + rim;
 
     let computedY;
-    if (r >= R) {
-        computedY = plateauY;
-    } else {
-        // Transition douce plateau → fosse (smoothstep cubique)
-        const t = THREE.MathUtils.smoothstep(r, R * 0.45, R);
+
+    if (distPct >= beachInner) {
+        // ── PLAGE : pente douce de beachBotY → surfaceY ──
+        const t = THREE.MathUtils.smoothstep(distPct, beachInner, 1.0);
+        const s = t * t * (3 - 2 * t);  // cubique douce
+        computedY = beachBotY + (surfaceY - beachBotY) * s;
+        // Fondu du relief rocheux → sable lisse (transition progressive)
+        const sandBlend = 1.0 - THREE.MathUtils.smoothstep(distPct, beachInner, beachInner + (1.0 - beachInner) * 0.4);
+        computedY += reefNoise * sandBlend * 0.5;
+    } else if (distPct >= reefInner) {
+        // ── RÉCIF : pente de reefBotY → beachBotY + relief ──
+        const t = THREE.MathUtils.smoothstep(distPct, reefInner, beachInner);
         const s = t * t * (3 - 2 * t);
-
-        // Fond de la fosse : atteint toujours FLOOR_Y dans les bassins profonds.
-        const floorVariation = fbm2(x * 0.06 + 3.7, z * 0.06 + 8.2) * 3.0;
-        const abyssY = Math.max(
-            Math.min(plateauY - abyssBelow, FLOOR_Y) + floorVariation,
-            FLOOR_Y
-        );
-        computedY = abyssY + (plateauY - abyssY) * s;
+        computedY = reefBotY + (beachBotY - reefBotY) * s + reefNoise;
+    } else {
+        // ── FOND / ABYSSE : plat au fond avec légère variation + fondu relief rocheux ──
+        const floorVar = diveState.terrain
+            ? fbm2(x * 0.06 + 3.7, z * 0.06 + 8.2) * Math.min(diveState.depth * 0.03, 3)
+            : 0;
+        // Pente douce du bord du fond vers le centre (pour éviter un mur vertical)
+        if (reefInner > 0.01) {
+            const t = THREE.MathUtils.smoothstep(distPct, 0, reefInner);
+            const s = t * t * (3 - 2 * t);
+            computedY = floorY + floorVar + (reefBotY - floorY) * s;
+            // Fondu du relief rocheux près de la limite récif (transition douce)
+            const reefProximity = THREE.MathUtils.smoothstep(distPct, reefInner * 0.5, reefInner);
+            computedY += reefNoise * reefProximity;
+        } else {
+            computedY = floorY + floorVar;
+        }
     }
 
-    // ── Application de la plage sur computedY ──
-    if (dist >= beachInner && beachOuter > beachInner) {
-        const beachT = THREE.MathUtils.smoothstep(dist, beachInner, beachOuter);
-        const beachS = beachT * beachT * (3 - 2 * beachT);
-        const surfaceY = CEIL_Y - 0.5;
-        computedY = computedY + (surfaceY - computedY) * beachS;
-    }
-
-    return computedY;
+    return Math.max(computedY, FLOOR_Y);
 }
 
 function floorLimitAt(x, z) {
@@ -703,7 +713,7 @@ function buildWalls() {
 
 // Relief rocheux Blue Hole
 function terrainSegs() {
-    return THREE.MathUtils.clamp(Math.round((WALL_POS * 2) / 1.75), 96, 256);
+    return THREE.MathUtils.clamp(Math.round((WALL_POS * 2) / 1.4), 128, 320);
 }
 function terrainTexRepeats() { return Math.max(2, Math.round((WALL_POS * 2) / 3.3)); }
 
@@ -714,25 +724,26 @@ function buildTerrain() {
     const geo = new THREE.PlaneGeometry(WALL_POS * 2, WALL_POS * 2, segs, segs);
     geo.rotateX(-Math.PI / 2);
 
-    // ── Couleurs biomes (référence conservée pour maj dynamique) ──
+    // ── Couleurs biomes (seuils auto-calculés depuis zones %) ──
     terrainBiomeUniforms = {
-        uBeachMax:  envState.biomeBeachMax,
-        uReefMax:   envState.biomeReefMax,
-        uAbyssMin:  envState.biomeAbyssMin,
-        uBlend:     Math.max(envState.biomeBlendSmooth, 0.1),
+        uBeachMax:  -beachBottomDepth(),
+        uReefMax:   -reefBottomDepth(),
+        uAbyssMin:  FLOOR_Y * 0.85,
+        uBlend:     Math.max(diveState.depth * 0.03, 0.5),
         colorSand:  new THREE.Color(0xc8b18a),   // beige sable naturel
         colorReef:  new THREE.Color(0x3a4f47),   // roche corallienne sous-marine
         colorAbyss: new THREE.Color(0x09131d),   // limon sombre bleu nuit
     };
 
     // ── MeshStandardMaterial : reçoit automatiquement SpotLights + FogExp2 ──
+    // Roughness élevé pour aspect rocheux mat (le sable et la roche sont tous deux mats)
     const mat = new THREE.MeshStandardMaterial({
         vertexColors: true,
-        roughness: 0.92,
+        roughness: 0.95,
         metalness: 0.0,
         flatShading: false,
     });
-    mat.envMapIntensity = 0.3;
+    mat.envMapIntensity = 0.2;
 
     terrainMesh = new THREE.Mesh(geo, mat);
     terrainMesh.receiveShadow = true;
@@ -742,13 +753,14 @@ function buildTerrain() {
     envMats.push(mat);
 }
 
-/** Met à jour les seuils de biomes et recalcule les couleurs vertex du terrain */
+/** Met à jour les seuils de biomes (auto-calculés depuis les zones %) et recalcule les couleurs vertex */
 function updateTerrainBiomeUniforms() {
     if (!terrainBiomeUniforms) return;
-    terrainBiomeUniforms.uBeachMax = envState.biomeBeachMax;
-    terrainBiomeUniforms.uReefMax  = envState.biomeReefMax;
-    terrainBiomeUniforms.uAbyssMin = envState.biomeAbyssMin;
-    terrainBiomeUniforms.uBlend    = Math.max(envState.biomeBlendSmooth, 0.1);
+    // Biomes = sous-produits des zones de terrain
+    terrainBiomeUniforms.uBeachMax = -beachBottomDepth();     // haut de la plage (sable)
+    terrainBiomeUniforms.uReefMax  = -reefBottomDepth();      // bas du récif (roche)
+    terrainBiomeUniforms.uAbyssMin = FLOOR_Y * 0.85;          // seuil abysse (85% du fond)
+    terrainBiomeUniforms.uBlend    = Math.max(diveState.depth * 0.03, 0.5); // fondu proportionnel
     computeTerrainVertexColors();
 }
 
@@ -776,6 +788,7 @@ function computeTerrainVertexColors() {
     const count = pos.count;
     const colors = new Float32Array(count * 3);
     const _c = new THREE.Color();
+    const _rock = new THREE.Color();
 
     const beachMax = terrainBiomeUniforms.uBeachMax;
     const reefMax  = terrainBiomeUniforms.uReefMax;
@@ -784,20 +797,54 @@ function computeTerrainVertexColors() {
     const cReef    = terrainBiomeUniforms.colorReef;
     const cAbyss   = terrainBiomeUniforms.colorAbyss;
 
+    // Palette de couleurs rocheuses pour le récif (variations naturelles)
+    const rockColors = [
+        new THREE.Color(0x4a5549),  // gris-vert sombre (roche moussue)
+        new THREE.Color(0x5c5346),  // brun-gris (roche sèche)
+        new THREE.Color(0x3d4a42),  // vert foncé (algues incrustées)
+        new THREE.Color(0x524d3e),  // brun chaud (roche calcaire)
+        new THREE.Color(0x3a4035),  // kaki sombre (roche profonde)
+    ];
+
     for (let i = 0; i < count; i++) {
-        const y = pos.getY(i);
+        const y  = pos.getY(i);
+        const px = pos.getX(i);
+        const pz = pos.getZ(i);
 
         // Transition abysse → récif (y croissant : abysse → roche)
         const tReef = THREE.MathUtils.smoothstep(y, reefMax - halfB, reefMax + halfB);
         // Transition récif → plage (y croissant : roche → sable)
         const tBeach = THREE.MathUtils.smoothstep(y, beachMax - halfB, beachMax + halfB);
 
+        // ── Couleur de base par biome ──
         _c.copy(cAbyss).lerp(cReef, tReef);
         _c.lerp(cSand, tBeach);
 
-        // Légère variation pour casser l'uniformité
-        const px = pos.getX(i), pz = pos.getZ(i);
-        const noise = Math.sin(px * 0.7) * Math.cos(pz * 0.9) * 0.025;
+        // ── Variation rocheuse progressive dans la zone récif ──
+        // tBeach = 0 → plein récif, tBeach = 1 → plage (sable)
+        const rockInfluence = (1.0 - tBeach) * tReef;  // max au milieu du récif
+        if (rockInfluence > 0.01) {
+            // Bruit pour choisir la teinte rocheuse locale
+            const rockNoise = fbm2(px * 0.25 + 5.0, pz * 0.25 + 11.0);
+            const rockIdx = Math.floor(rockNoise * rockColors.length) % rockColors.length;
+            _rock.copy(rockColors[rockIdx]);
+            // Mélanger la teinte rocheuse avec la couleur de base
+            _c.lerp(_rock, rockInfluence * 0.6);
+            // Assombrir les creux rocheux (bruit haute fréquence)
+            const rockDetail = fbm2(px * 1.5 + 30.0, pz * 1.5 + 22.0);
+            _c.multiplyScalar(0.85 + rockDetail * 0.3);
+        }
+
+        // ── Variation sable (légère) dans la zone plage ──
+        if (tBeach > 0.5) {
+            const sandNoise = fbm2(px * 0.8 + 2.0, pz * 0.8 + 6.0);
+            _c.r += (sandNoise - 0.5) * 0.04;
+            _c.g += (sandNoise - 0.5) * 0.03;
+            _c.b += (sandNoise - 0.5) * 0.02;
+        }
+
+        // Légère variation globale pour casser l'uniformité
+        const noise = Math.sin(px * 0.7) * Math.cos(pz * 0.9) * 0.015;
         colors[i * 3]     = THREE.MathUtils.clamp(_c.r + noise, 0, 1);
         colors[i * 3 + 1] = THREE.MathUtils.clamp(_c.g + noise, 0, 1);
         colors[i * 3 + 2] = THREE.MathUtils.clamp(_c.b + noise * 0.5, 0, 1);
@@ -838,14 +885,16 @@ function randomReefPoint(rng, margin) {
     for (let k = 0; k < 24; k++) {
         const p = randomFloorPoint(rng, margin);
         if (!diveState.terrain) return p;
-        if (terrainHeightAt(p.x, p.z) > -REEF_DEPTH - 1.5) return p;
+        // Point 7 (revue) : reefBottomDepth() = vrai BAS du plateau récifal
+        // (REEF_DEPTH ≈ bas de plage ne correspondait pas à cette sémantique).
+        if (terrainHeightAt(p.x, p.z) > -reefBottomDepth() - 1.5) return p;
     }
     return randomFloorPoint(rng, margin);
 }
 
 function reefPlateauArea() {
     const R = Math.max(1, WALL_LIMIT);
-    const rPit = (FLOOR_Y < -REEF_DEPTH - 1) ? Math.min(R, WALL_POS * PIT_RADIUS_K) : 0;
+    const rPit = (FLOOR_Y < -REEF_DEPTH - 1) ? Math.min(R, fondZoneRadius()) : 0;
     return Math.max(1, Math.PI * (R * R - rPit * rPit));
 }
 
@@ -918,8 +967,19 @@ async function loadScene3DConfig() {
                 const box = meshBoundingBox(gltf.scene);
                 const size = box.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z) || 1;
-                const baseScale = (obj.real_size_m || 0.2) / maxDim;
-                console.log(`[SubSim] ${obj.model}: meshBbox=(${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)}) maxDim=${maxDim.toFixed(4)} baseScale=${baseScale.toFixed(3)} → ${(baseScale * maxDim).toFixed(3)}m`);
+                let baseScale = (obj.real_size_m || 0.2) / maxDim;
+                // ── Échelle minimum garantie : le modèle doit faire au moins 30% de sa taille réelle ──
+                // Protège contre les GLB dont les unités internes sont très grandes (mm, cm)
+                const minRenderedSize = (obj.real_size_m || 0.2) * 0.3;
+                if (baseScale * maxDim < minRenderedSize) {
+                    const oldBase = baseScale;
+                    baseScale = minRenderedSize / maxDim;
+                    console.log(`[SubSim] ⚠️ ${obj.model}: baseScale boosté de ${oldBase.toFixed(4)} → ${baseScale.toFixed(4)} (trop petit: ${oldBase * maxDim.toFixed(3)}m < ${minRenderedSize.toFixed(2)}m)`);
+                }
+                // Compter les meshes dans le modèle
+                let meshCount = 0;
+                gltf.scene.traverse(ch => { if (ch.isMesh) meshCount++; });
+                console.log(`[SubSim] ${obj.model}: meshBbox=(${size.x.toFixed(3)}, ${size.y.toFixed(3)}, ${size.z.toFixed(3)}) maxDim=${maxDim.toFixed(4)} baseScale=${baseScale.toFixed(3)} → ${(baseScale * maxDim).toFixed(3)}m | meshes=${meshCount}`);
                 const count = obj.count || 1;
                 const validBehaviors = ['fuir', 'curieux', 'neant', 'static', 'nageant'];
                 if (!validBehaviors.includes(obj.behavior)) {
@@ -935,19 +995,28 @@ async function loadScene3DConfig() {
                     // qu'une partie ne dépasse le point d'ancrage (caméra)
                     const cloneBox = meshBoundingBox(modelClone);
                     const cloneCenter = cloneBox.getCenter(new THREE.Vector3());
-                    modelClone.position.sub(cloneCenter);
+                    if (obj.type === 'flore') {
+                        // Flore : centrer X/Z mais garder la BASE au sol (min Y = 0)
+                        modelClone.position.x -= cloneCenter.x;
+                        modelClone.position.z -= cloneCenter.z;
+                        modelClone.position.y -= cloneBox.min.y;  // base à Y=0
+                    } else {
+                        modelClone.position.sub(cloneCenter);
+                    }
                     // ── Correction heading : aligner le modèle face +Z ──
-                    // Détection par normales de surface : la normale du vertex
-                    // le plus en avant pointe dans la direction de déplacement.
-                    // Plus fiable que le comptage de vertices (qui échoue sur
-                    // les poissons à cause du volume de la nageoire caudale).
+                    // Détection par moyenne pondérée des normales : on sépare les
+                    // vertices en moitié avant (Z+) et arrière (Z-), puis on moyenne
+                    // la composante Z des normales de chaque côté.
+                    // Beaucoup plus robuste qu'un seul vertex extrême (qui peut être
+                    // sur une nageoire avec une normale atypique).
                     modelClone.updateMatrixWorld(true);
                     const wm = modelClone.matrixWorld;
                     const _nmat = new THREE.Matrix3().getNormalMatrix(wm);
                     const _v = new THREE.Vector3();
                     const _n = new THREE.Vector3();
-                    let maxZ = -Infinity, minZ = Infinity;
-                    let normAtMaxZ = 0, normAtMinZ = 0;
+                    // Collecte positions/normales pour calculer le centre Z
+                    const _verts = [];
+                    const _norms = [];
                     let vPx = 0, vNx = 0;
                     modelClone.traverse(child => {
                         if ((child.isMesh || child.isSkinnedMesh) && child.geometry) {
@@ -957,40 +1026,55 @@ async function loadScene3DConfig() {
                             for (let vi = 0; vi < pos.count; vi++) {
                                 _v.fromBufferAttribute(pos, vi).applyMatrix4(wm);
                                 if (_v.x > 0.01) vPx++; else if (_v.x < -0.01) vNx++;
+                                _verts.push(_v.z);
                                 if (norm) {
                                     _n.fromBufferAttribute(norm, vi).applyMatrix3(_nmat).normalize();
-                                    if (_v.z > maxZ) { maxZ = _v.z; normAtMaxZ = _n.z; }
-                                    if (_v.z < minZ) { minZ = _v.z; normAtMinZ = _n.z; }
+                                    _norms.push(_n.z);
+                                } else {
+                                    _norms.push(0);
                                 }
                             }
                         }
                     });
                     const cloneSize = cloneBox.getSize(new THREE.Vector3());
                     let headingOffset = 0;
-                    if (cloneSize.x > cloneSize.z * 1.2) {
-                        // Modèle allongé sur X → tourne de ±90° pour aligner sur Z
-                        headingOffset = (vPx > vNx) ? -Math.PI / 2 : Math.PI / 2;
-                    } else if (cloneSize.z > cloneSize.x * 1.2) {
-                        // Modèle allongé sur Z → détection par normales
-                        // La normale au vertex le plus en avant (maxZ) pointe vers l'avant.
-                        // Si normAtMaxZ < 0 → le modèle fait face à -Z → rotation 180°
-                        if (normAtMaxZ < -0.1) {
-                            headingOffset = Math.PI;
-                        } else if (normAtMinZ > 0.1) {
-                            headingOffset = Math.PI; // cohérence : arrière pointe vers l'avant
-                        } else {
-                            headingOffset = 0; // normale avant pointe +Z → OK
-                        }
+                    // ── Détection heading : mammifères, gros modèles (≥5m) et faune nageante ──
+                    const _realSize = obj.real_size_m || 0.5;
+                    const _isMamifere = obj.type === 'mamifere';
+                    const _isFauneNageante = obj.type === 'faune' && obj.behavior !== 'static';
+                    const skipHeading = !_isMamifere && !(_realSize >= 5 || _isFauneNageante);
+                    // Moyenne pondérée des normales avant/arrière
+                    let frontSum = 0, frontCount = 0;
+                    let backSum = 0, backCount = 0;
+                    const centerZ = (cloneBox.max.z + cloneBox.min.z) / 2;
+                    for (let i = 0; i < _verts.length; i++) {
+                        if (_verts[i] > centerZ) { frontSum += _norms[i]; frontCount++; }
+                        else { backSum += _norms[i]; backCount++; }
                     }
-                    // Fallback : normales aux extrêmes Z
-                    if (headingOffset === 0 && (normAtMaxZ < -0.1 || normAtMinZ > 0.1)) {
-                        headingOffset = Math.PI;
+                    const frontAvg = frontCount > 0 ? frontSum / frontCount : 0;
+                    const backAvg = backCount > 0 ? backSum / backCount : 0;
+                    if (!skipHeading) {
+                        if (cloneSize.x > cloneSize.z * 1.2) {
+                            headingOffset = (vPx > vNx) ? -Math.PI / 2 : Math.PI / 2;
+                        } else if (cloneSize.z > cloneSize.x * 1.2) {
+                            // Modèle allongé sur Z : comparer normales avant vs arrière
+                            // Si les normales avant pointent -Z ET arrière pointent +Z → face à -Z → 180°
+                            if (frontAvg < -0.05 && backAvg > 0.05) {
+                                headingOffset = Math.PI;
+                            } else if (frontAvg > 0.05 && backAvg < -0.05) {
+                                headingOffset = 0; // déjà face +Z → OK
+                            } else if (frontAvg < -0.05) {
+                                headingOffset = Math.PI; // avant pointe -Z
+                            } else if (backAvg > 0.05) {
+                                headingOffset = Math.PI; // arrière pointe +Z
+                            }
+                        }
                     }
                     if (headingOffset !== 0) {
                         modelClone.rotation.y = headingOffset;
-                        console.log(`[SubSim] ${obj.name}: heading corrigé de ${(headingOffset * 180 / Math.PI).toFixed(0)}° (normMaxZ=${normAtMaxZ.toFixed(2)}, normMinZ=${normAtMinZ.toFixed(2)}, size x=${cloneSize.x.toFixed(1)} z=${cloneSize.z.toFixed(1)})`);
-                    } else {
-                        console.log(`[SubSim] ${obj.name}: heading OK (normMaxZ=${normAtMaxZ.toFixed(2)}, normMinZ=${normAtMinZ.toFixed(2)})`);
+                        if (i === 0) console.log(`[SubSim] ${obj.name}: heading corrigé de ${(headingOffset * 180 / Math.PI).toFixed(0)}° (frontAvg=${frontAvg.toFixed(3)}, backAvg=${backAvg.toFixed(3)}, size x=${cloneSize.x.toFixed(1)} z=${cloneSize.z.toFixed(1)})`);
+                    } else if (i === 0) {
+                        console.log(`[SubSim] ${obj.name}: heading ${skipHeading ? 'ignoré (modèle static/petit)' : 'OK sans correction'} (frontAvg=${frontAvg.toFixed(3)}, backAvg=${backAvg.toFixed(3)})`);
                     }
                     instanceGroup.add(modelClone);
                     positionInZone(instanceGroup, obj);
@@ -1001,16 +1085,12 @@ async function loadScene3DConfig() {
                     const hasAnims = gltf.animations && gltf.animations.length > 0;
                     if (hasAnims && !skipAnim) {
                         const mixer = new THREE.AnimationMixer(modelClone);
+                        mixer._group = instanceGroup;  // tag pour skip LOD
                         gltf.animations.forEach(clip => {
                             const action = mixer.clipAction(clip);
                             action.play();
                         });
                         scene3dMixers.push(mixer);
-                        console.log(`[SubSim] ${obj.name} #${i}: ${gltf.animations.length} animation(s) lancée(s), mixer=${scene3dMixers.length}`);
-                    } else if (skipAnim && hasAnims) {
-                        console.log(`[SubSim] ${obj.name} #${i}: animation GLB bloquée (behavior=static)`);
-                    } else {
-                        console.log(`[SubSim] ${obj.name} #${i}: aucune animation dans le GLB`);
                     }
                     // Facteur d'échelle cinématique : les gros animaux ont
                     // des trajectoires plus larges et des mouvements plus lents
@@ -1019,34 +1099,89 @@ async function loadScene3DConfig() {
                     const sizeCat = Math.min(2.5, Math.max(1, Math.cbrt(realSize / 0.5)));
 
                     // Préparer l'objet à pousser dans scene3dObjects
-                    // Rayon de trajectoire adapté à la taille du bassin
+                    // Rayon de trajectoire proportionnel à la taille réelle de l'animal
                     const isMamifere = obj.type === 'mamifere';
                     const basinHalf = compactHalfW();
-                    const maxPathR = basinHalf * 0.65; // le huit ne dépasse pas 65% du bassin
+                    // ── P1 : en zone récif, le huit doit tenir DANS l'anneau [innerR, outerR] ──
+                    // Sinon clampToBasin re-projette le poisson sur une frontière radiale de
+                    // l'anneau à chaque frame → glissement contre un mur invisible, tangente
+                    // incohérente avec le déplacement réel = nage "coincée" saccadée.
+                    // (Mammifères exclus : leur huit est recalculé dynamiquement dans la boucle.)
+                    const isReefZone = !isMamifere && (obj.zone === 'recif' || obj.zone === 'sol');
+                    const ring = reefRingRadii();
+                    // Demi-ouverture utile de l'anneau (−1 m de marge de sécurité)
+                    const ringGap = Math.max(1, (ring.outerR - ring.innerR) / 2 - 1);
+                    const maxPathR = isReefZone
+                        ? Math.min(basinHalf * 0.65, ringGap)
+                        : basinHalf * 0.65; // le huit ne dépasse pas 65% du bassin
+                    // Rayons asymétriques pour éviter l'effet "ligne" (rx ≠ rz)
+                    // Poissons : 2–6 m selon la taille (√realSize × 3–9), plafonnés
+                    // à la demi-ouverture de l'anneau récif (ringGap) en zone récif.
                     const pathRx = isMamifere
-                        ? Math.min(15 + Math.random() * 15, maxPathR)    // mammifère : jusqu'à 30m, clamp bassin
-                        : Math.min((5 + Math.random() * 7) * sizeCat, maxPathR);
+                        ? Math.min(15 + Math.random() * 15, maxPathR)
+                        : Math.min((3 + Math.random() * 6) * Math.sqrt(realSize), maxPathR);
                     const pathRz = isMamifere
                         ? Math.min(15 + Math.random() * 15, maxPathR)
-                        : Math.min((5 + Math.random() * 7) * sizeCat, maxPathR);
+                        : Math.min((3 + Math.random() * 6) * Math.sqrt(realSize), maxPathR);
+                    // Vitesse linéaire désirée (m/s) — proportionnelle à la taille
+                    // ── P3 : le champ "speed" du JSON est désormais appliqué en ratio ──
+                    // (ex. guppy speed=1.5 → ≈0.47 m/s ; thon speed=0.9 → ≈0.32 m/s),
+                    // avec bornes finales [0.2, 8] m/s pour rester physiquement plausible.
+                    // Les mammifères gardent leur vitesse de référence (1.5 m/s) : leur
+                    // cinématique (diveSpeed, machine à états) ne doit pas être modifiée.
+                    const speedRatio = Math.max(0.1, obj.speed || 1);
+                    let linearSpeed = isMamifere ? 1.5
+                        : Math.max(0.3, Math.sqrt(realSize) * 0.5) * speedRatio;
+                    linearSpeed = THREE.MathUtils.clamp(linearSpeed, 0.2, 8);
+                    // Jitter aléatoire du centre : casse l'effet "ring" quand tous les objets
+                    // sont à la même distance radiale dans une zone étroite
+                    const jitterR = (2 + Math.random() * 4) * Math.sqrt(realSize);
+                    const jitterAngle = Math.random() * Math.PI * 2;
+                    let cx = instanceGroup.position.x + Math.cos(jitterAngle) * jitterR;
+                    let cz = instanceGroup.position.z + Math.sin(jitterAngle) * jitterR;
+                    // ── P1 : en zone récif, clamper le centre RADIALEMENT dans l'anneau ──
+                    // (marge = extension max du huit + 1 m de sécurité) dès la création,
+                    // pour que la trajectoire complète tienne dans l'anneau dès la 1re frame.
+                    if (isReefZone) {
+                        const maxExt = Math.max(pathRx, pathRz) + 1;
+                        // Point 1 (revue) : rMin jamais au-delà du milieu d'anneau → même anneau
+                        // très étroit, le centre reste DANS l'anneau (pas de snap dégénéré hors bassin).
+                        const rMin = Math.min(ring.innerR + maxExt, (ring.innerR + ring.outerR) / 2);
+                        const rMax = Math.max(rMin, ring.outerR - maxExt);
+                        const r = Math.hypot(cx, cz);
+                        if (r > 0.01 && (r < rMin || r > rMax)) {
+                            const rTarget = THREE.MathUtils.clamp(r, rMin, rMax);
+                            cx *= rTarget / r;
+                            cz *= rTarget / r;
+                        }
+                    }
                     const objData = {
                         config: obj, group: instanceGroup,
                         velocity: new THREE.Vector3(),
                         targetYaw: Math.random() * Math.PI * 2,
                         changeTimer: Math.random() * 5,
                         baseY: instanceGroup.position.y,
-                        sizeCat: sizeCat,  // mémorisé pour updateSceneObjects
-                        // Paramètres trajectoire en huit (∞) — proportionnels à la taille
+                        sizeCat: sizeCat,
+                        // Paramètres trajectoire en huit (∞) — orientation randomisée
                         path8: {
-                            cx: instanceGroup.position.x,
-                            cz: instanceGroup.position.z,
+                            cx: cx,
+                            cz: cz,
                             rx: pathRx,
                             rz: pathRz,
                             phase: Math.random() * Math.PI * 2,
                             dir: Math.random() > 0.5 ? 1 : -1,
-                            yAmp: (0.2 + Math.random() * 0.4) * sizeCat,    // amplitude verticale adaptée
+                            yAmp: (0.3 + Math.random() * 0.7) * Math.sqrt(realSize),
+                            linSpeed: linearSpeed,
+                            // Rotation aléatoire du huit pour éparpiller les directions
+                            angle: Math.random() * Math.PI * 2,
+                            cosA: 0, sinA: 0,  // calculés après
                         },
                     };
+                    // Calculer cosA/sinA depuis l'angle
+                    objData.path8.cosA = Math.cos(objData.path8.angle);
+                    objData.path8.sinA = Math.sin(objData.path8.angle);
+                    // Stocker si le heading a été corrigé (pour ajuster la tangente si nage à l'envers)
+                    objData.headingOffset = headingOffset;
                     // ── Mammifère : machine à états surface/plongeon/descente/profondeur/remontée ──
                     if (obj.type === 'mamifere') {
                         const midDepthY = FLOOR_Y * 0.5;
@@ -1076,11 +1211,39 @@ async function loadScene3DConfig() {
                         };
                     }
                     scene3dObjects.push(objData);
+                    // Activer le frustum culling sur tous les meshes du groupe
+                    instanceGroup.traverse(child => {
+                        if (child.isMesh) child.frustumCulled = true;
+                    });
                     scene.add(instanceGroup);
                 }
             } catch (e) { console.warn(`[SubSim] ❌ Objet non chargé: ${obj.model}`, e); }
         }
         console.log(`[SubSim] ✅ Scène 3D chargée: ${scene3dObjects.length} instances, ${scene3dMixers.length} mixers animés`);
+        const maxDist = diveState.visibility;
+        console.log(`[SubSim] 🔭 LOD: maxRender=${maxDist.toFixed(0)}m (visibilité), WALL_POS=${WALL_POS}m`);
+        // Diagnostic par zone et par modèle
+        const zoneCounts = {};
+        const modelCounts = {};
+        scene3dObjects.forEach(o => {
+            const z = o.config.zone || 'pleine_eau';
+            const m = o.config.name;
+            zoneCounts[z] = (zoneCounts[z] || 0) + 1;
+            modelCounts[m] = (modelCounts[m] || 0) + 1;
+        });
+        console.log('[SubSim] 📍 Zones:', zoneCounts);
+        console.log('[SubSim] 🐟 Modèles:', modelCounts);
+        // Échantillon pour chaque modèle avec échelle et position
+        for (const [name, count] of Object.entries(modelCounts)) {
+            const sample = scene3dObjects.filter(o => o.config.name === name)[0];
+            if (sample) {
+                const p = sample.group.position;
+                const sc = sample.group.children[0] ? sample.group.children[0].scale.x.toFixed(3) : 'N/A';
+                const rx = sample.path8 ? sample.path8.rx.toFixed(1) : '-';
+                const rz = sample.path8 ? sample.path8.rz.toFixed(1) : '-';
+                console.log(`  ${name} (×${count}): pos=(${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}) dist=${Math.hypot(p.x,p.z).toFixed(1)}m scale=${sc} pathR=(${rx},${rz})`);
+            }
+        }
     } catch (e) { console.warn('[SubSim] Config scène 3D non disponible', e); }
 }
 
@@ -1124,13 +1287,13 @@ async function loadEnvironmentConfig() {
         // Terrain & Parois (viennent du JSON, plus du localStorage)
         if (env.terrain) {
             diveState.terrain = env.terrain.enabled !== false;
-            // Biomes (paliers de texture de sol)
-            if (env.terrain.biomes) {
-                const b = env.terrain.biomes;
-                if (b.beach_depth_max !== undefined) envState.biomeBeachMax = b.beach_depth_max;
-                if (b.reef_depth_max !== undefined) envState.biomeReefMax = b.reef_depth_max;
-                if (b.abyss_depth_min !== undefined) envState.biomeAbyssMin = b.abyss_depth_min;
-                if (b.blend_smoothness !== undefined) envState.biomeBlendSmooth = b.blend_smoothness;
+            // Zones de terrain (%)
+            if (env.terrain.zones) {
+                const z = env.terrain.zones;
+                if (z.beach_extent !== undefined)   diveState.beachExtent   = z.beach_extent;
+                if (z.beach_depth_pct !== undefined) diveState.beachDepthPct = z.beach_depth_pct;
+                if (z.reef_extent !== undefined)    diveState.reefExtent    = z.reef_extent;
+                if (z.reef_depth_pct !== undefined) diveState.reefDepthPct  = z.reef_depth_pct;
             }
         }
         if (env.walls) {
@@ -1582,7 +1745,7 @@ function buildPikes() {
     pikeData.length = 0;
     pikeGroup = new THREE.Group();
     const rng = mulberry32(6060);
-    const patrolR = Math.max(3, WALL_POS * PIT_RADIUS_K * 0.7);
+    const patrolR = Math.max(3, fondZoneRadius() * 0.7);
     for (let i = 0; i < PIKE_COUNT; i++) {
         const g = buildPikeMesh();
         const angle = rng() * Math.PI * 2;
@@ -1596,12 +1759,14 @@ function buildPikes() {
 
 function updatePikes(dt) {
     if (!pikeGroup || !pikeGroup.visible) return;
-    const patrolR = Math.max(3, WALL_POS * PIT_RADIUS_K * 0.7);
+    const patrolR = Math.max(3, fondZoneRadius() * 0.7);
     for (const p of pikeData) {
         const g = p.group;
         p.angle += dt * (p.speed / patrolR);
         _pikeTarget.set(Math.cos(p.angle) * patrolR, p.y + Math.sin(p.angle * 3.1) * 1.5, Math.sin(p.angle) * patrolR);
-        if (posWorld.y < -REEF_DEPTH && g.position.distanceTo(posWorld) < 12) {
+        // Point 7 (revue) : prédation sous le vrai bas du récif (reefBottomDepth),
+        // pas sous REEF_DEPTH (≈ bas de plage, sémantique différente).
+        if (posWorld.y < -reefBottomDepth() && g.position.distanceTo(posWorld) < 12) {
             _pikeTarget.copy(posWorld); _pikeTarget.y = Math.max(_pikeTarget.y - 0.4, FLOOR_Y + 1);
         }
         _lifeV.copy(_pikeTarget).sub(g.position);
@@ -1661,53 +1826,78 @@ function rebuildLife() {
 /** Rayon minimum autour du ROV (origine) où aucun objet ne peut apparaître. */
 const SPAWN_GUARD_RADIUS = 5.0;  // mètres
 
+/**
+ * Rayons intérieur/extérieur de l'anneau récif, dérivés des % du terrain
+ * (mêmes formules que positionInZone()/clampToBasin() — source unique de vérité).
+ * Utilisé par la correction P1 pour contraindre les trajectoires en huit
+ * de la zone 'recif' DANS l'anneau (évite l'écrasement radial par clampToBasin).
+ */
+function reefRingRadii() {
+    const beachFrac = diveState.beachExtent / 100;
+    const reefFrac  = diveState.reefExtent / 100;
+    return {
+        innerR: WALL_POS * Math.max(0, 1.0 - beachFrac - reefFrac),
+        outerR: WALL_POS * (1.0 - beachFrac),
+    };
+}
+
 function positionInZone(group, obj) {
     const zone = obj.zone || 'pleine_eau';
-    const halfW = compactHalfW() * 0.92;  // zone de spawn très large pour éparpiller
-    // Marge sous la surface : empêche les modèles de dépasser CEIL_Y.
+    const halfW = compactHalfW() * 0.92;
     const SURF_MARGIN = 1.5;
-    // Rayon de la fosse abyssale (fraction de WALL_POS)
-    const abyssR = WALL_POS * (diveState.abyssRadius / 100);
-    // --- Position X/Z + Y selon la zone ---
+    const abyssR = fondZoneRadius();
+
+    // ── Limites réelles des zones depuis les % du terrain ──
+    // Point 10 (revue) : reefRingRadii() = source unique des rayons de l'anneau récif
+    const _ring = reefRingRadii();
+    const beachInnerR = _ring.outerR;                             // rayon intérieur plage (= extérieur récif)
+    const beachOuterR = WALL_POS;                                 // rayon extérieur plage (= mur)
+    const reefInnerR  = _ring.innerR;                             // rayon intérieur récif
+    const reefOuterR  = beachInnerR;                              // rayon extérieur récif = intérieur plage
+
     let x, z, y;
 
     switch (zone) {
 
-        // ── SOL : plateau corallien (hors fosse) ──
+        // ── RÉCIF : entre reefInnerR et reefOuterR, hors fosse ──
+        case 'recif':
         case 'sol': {
             for (let attempt = 0; attempt < 40; attempt++) {
-                x = (Math.random() * 2 - 1) * halfW;
-                z = (Math.random() * 2 - 1) * halfW;
-                // Exclure la fosse abyssale + garde ROV
+                const angle = Math.random() * Math.PI * 2;
+                const dist = reefInnerR + Math.random() * (reefOuterR - reefInnerR);
+                x = Math.cos(angle) * dist;
+                z = Math.sin(angle) * dist;
                 if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS && Math.hypot(x, z) > abyssR * 1.15) break;
             }
             const floorY = terrainMeshHeightAt(x, z);
             if (obj.type === 'flore') {
-                y = floorY + 0.05;                         // ancré au sol
+                y = floorY + 0.05;
+            } else if (obj.type === 'objet') {
+                // Objets volumineux (epave) : posés sur le sol
+                y = floorY + 0.2;
             } else {
-                y = floorY + 0.5 + Math.random() * 4.0;   // faune juste au-dessus du récif
+                // Faune : utiliser toute la colonne d'eau au-dessus du récif
+                // (0.5m à 15m au-dessus du sol pour un effet 3D naturel)
+                const reefDepth = Math.abs(floorY - CEIL_Y);
+                const maxYAbove = Math.min(15, reefDepth * 0.7);
+                y = floorY + 0.5 + Math.random() * maxYAbove;
             }
             break;
         }
 
-        // ── PLAGE : pente douce proportionnelle en bordure (82%→100% de WALL_POS) ──
+        // ── PLAGE : entre beachInnerR et beachOuterR ──
         case 'plage': {
-            // Biaisé vers la portion habitable de la plage (terrain entre -1m et -8m)
-            const beachInner = WALL_POS * 0.88;  // portion superficielle uniquement
-            const beachOuter = WALL_POS * 0.96;
             for (let attempt = 0; attempt < 40; attempt++) {
                 const angle = Math.random() * Math.PI * 2;
-                const dist = beachInner + Math.random() * (beachOuter - beachInner);
+                const dist = beachInnerR + Math.random() * (beachOuterR - beachInnerR);
                 x = Math.cos(angle) * dist;
                 z = Math.sin(angle) * dist;
                 if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
             }
             const floorY = terrainMeshHeightAt(x, z);
             if (obj.type === 'flore') {
-                // Flore ancrée au sol de la plage
                 y = floorY + 0.05;
             } else {
-                // Faune : nage dans la colonne d'eau au-dessus du sol
                 const topY = Math.max(floorY + 0.5, CEIL_Y - 1.5);
                 const botY = floorY + 0.2;
                 y = botY + Math.random() * Math.max(0.3, topY - botY);
@@ -1715,9 +1905,23 @@ function positionInZone(group, obj) {
             break;
         }
 
-        // ── ABYSSE : exclusivement au fond de la fosse abyssale ──
+        // ── FOND : zone centrale (0 → reefInnerR), hors fosse ──
+        case 'fond': {
+            const fondMaxR = Math.max(reefInnerR * 0.95, abyssR * 1.2);
+            for (let attempt = 0; attempt < 30; attempt++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = abyssR * 1.1 + Math.random() * Math.max(0, fondMaxR - abyssR * 1.1);
+                x = Math.cos(angle) * dist;
+                z = Math.sin(angle) * dist;
+                if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
+            }
+            const floorY = terrainMeshHeightAt(x, z);
+            y = (obj.type === 'flore') ? floorY + 0.05 : floorY + 0.3 + Math.random() * 2.7;
+            break;
+        }
+
+        // ── ABYSSE : exclusivement dans la fosse (rayon < abyssR) ──
         case 'abysse': {
-            // Confiné dans le rayon de la fosse (avec petite marge intérieure)
             const maxR = abyssR * 0.85;
             for (let attempt = 0; attempt < 40; attempt++) {
                 const angle = Math.random() * Math.PI * 2;
@@ -1728,9 +1932,9 @@ function positionInZone(group, obj) {
             }
             const floorY = terrainMeshHeightAt(x, z);
             if (obj.type === 'flore') {
-                y = floorY + 0.05;                          // ancré au sol abyssal
+                y = floorY + 0.05;
             } else {
-                y = floorY + 0.2 + Math.random() * 2.0;    // faune proche du fond
+                y = floorY + 0.2 + Math.random() * 2.0;
             }
             break;
         }
@@ -1744,18 +1948,6 @@ function positionInZone(group, obj) {
             }
             y = CEIL_Y - 2 - Math.random() * 3;
             break;
-
-        // ── FOND (rétrocompatibilité) : proche du sol, toute zone ──
-        case 'fond': {
-            for (let attempt = 0; attempt < 30; attempt++) {
-                x = (Math.random() * 2 - 1) * halfW;
-                z = (Math.random() * 2 - 1) * halfW;
-                if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
-            }
-            const floorY = terrainMeshHeightAt(x, z);
-            y = (obj.type === 'flore') ? floorY + 0.05 : floorY + 0.3 + Math.random() * 2.7;
-            break;
-        }
 
         // ── PLEINE EAU : colonne d'eau, biaisé vers les faibles profondeurs ──
         case 'pleine_eau': {
@@ -1773,51 +1965,131 @@ function positionInZone(group, obj) {
             break;
         }
 
-        // ── MULTI_COUCHE (défaut) : surface (-2m) → plateau corallien (~-25m), hors fosse ──
+        // ── MULTI_COUCHE (défaut) : surface → bas du récif, hors fosse ──
         default: {
             for (let attempt = 0; attempt < 30; attempt++) {
                 x = (Math.random() * 2 - 1) * halfW;
                 z = (Math.random() * 2 - 1) * halfW;
                 if (Math.hypot(x, z) >= SPAWN_GUARD_RADIUS) break;
             }
-            // Entre CEIL_Y - 2 (juste sous surface) et le plateau corallien (~-REEF_DEPTH)
-            // Exclut la fosse abyssale
-            const yMax = CEIL_Y - SURF_MARGIN;          // -1.5 m
-            const yMin = -(REEF_DEPTH + diveState.reliefHeight);  // ~-25 m
+            const yMax = CEIL_Y - SURF_MARGIN;
+            const yMin = -reefBottomDepth();
             y = yMin + Math.random() * (yMax - yMin);
             break;
         }
     }
     group.position.set(x, y, z);
     group.rotation.y = Math.random() * Math.PI * 2;
-    console.log(`[SubSim] ${obj.name} → zone=${zone} kinematic=${obj.kinematic} behavior=${obj.behavior} pos=(${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`);
 }
 
 // ===========================================================================
 // MISE À JOUR FAUNE/FLORE (comportements dynamiques)
 // ===========================================================================
-function updateSceneObjects(dt) {
-    // 1. Mise à jour des animations GLB (mixers)
-    scene3dMixers.forEach(m => m.update(dt));
-
+// rawDt : dt brut de la frame (mixers, LOD). Le dt effectif de simulation de
+// chaque objet est recalculé en tête du forEach (voir correction P2 ci-dessous).
+function updateSceneObjects(rawDt) {
+    if (!modelGroup) return;  // sécurité : modèle ROV pas encore initialisé
     const rovPos = modelGroup.position;
 
-    scene3dObjects.forEach(obj => {
+    // ── LOD : distance max = visibilité de l'eau (naturel : on voit pas à 100m) ──
+    const maxRenderDist = diveState.visibility;
+    const maxRenderDistSq = maxRenderDist * maxRenderDist;
+
+    // Compteur de frame pour l'update partielle
+    if (!updateSceneObjects._frame) updateSceneObjects._frame = 0;
+    updateSceneObjects._frame++;
+    const frame = updateSceneObjects._frame;
+
+    // Position ROV pour distance
+    const rovX = rovPos.x, rovZ = rovPos.z;
+
+    // ── Point 5 (revue) : hoist — rayons de l'anneau récif calculés UNE fois par frame ──
+    // (évite un appel + allocation d'objet par poisson dans le clamp radial de la boucle).
+    const reefRing = reefRingRadii();
+
+    // ── Debug : log périodique (toutes les ~5s) ──
+    if (!updateSceneObjects._logged) {
+        updateSceneObjects._logged = true;
+        console.log(`[SubSim] 🔍 LOD: maxRender=${maxRenderDist.toFixed(0)}m, WALL_POS=${WALL_POS}, ${scene3dObjects.length} objets, ${scene3dMixers.length} mixers`);
+    }
+    if (frame % 300 === 1) {
+        let vis = 0, hid = 0;
+        scene3dObjects.forEach(o => { if (o.group && o.group.visible) vis++; else hid++; });
+        console.log(`[SubSim] 📊 frame=${frame}: ${scene3dObjects.length} objets, visibles=${vis}, cachés=${hid}, ROV=(${rovX.toFixed(1)},${rovZ.toFixed(1)})`);
+        scene3dObjects.slice(0, 5).forEach((o, i) => {
+            const p = o.group ? o.group.position : {x:0,y:0,z:0};
+            const d = Math.hypot(p.x - rovX, p.z - rovZ);
+            console.log(`  [${i}] ${o.config.name} zone=${o.config.zone} dist=${d.toFixed(1)}m vis=${o.group ? o.group.visible : 'null'} ${o.path8 ? 'path8✓' : ''}`);
+        });
+    }
+
+    // ── 1. Mise à jour des animations GLB (mixers) — uniquement pour objets visibles ──
+    for (let i = 0; i < scene3dMixers.length; i++) {
+        const m = scene3dMixers[i];
+        if (m._group && !m._group.visible) continue;
+        m.update(rawDt);
+    }
+
+    scene3dObjects.forEach((obj, idx) => {
+        // ── P2 : dt effectif de simulation ──
+        // Le throttling LOD (ci-dessous) saute des frames pour les objets lointains :
+        // le dt de ces frames sautées est accumulé (obj._accDt) puis restitué ici pour
+        // que la vitesse de nage reste constante malgré la mise à jour partielle.
+        // Plafonné à 0.25 s pour éviter tout saut de position après un onglet inactif.
+        let dt = Math.min(rawDt + (obj._accDt || 0), 0.25);
+        obj._accDt = 0;
         const cfg = obj.config;
         const objType = cfg.type || 'faune';
         let kinematic = cfg.kinematic || 'fixe';
-        // Forcer le comportement cinématique selon le type de modèle
         if (objType === 'flore') kinematic = 'ancre_ondule';
         if (objType === 'objet') kinematic = 'fixe';
         if (objType === 'mamifere') kinematic = 'nageant';
-        // Auto-détection : si kinematic=fixe mais behavior implique du mouvement, auto-upgrade
         if (kinematic === 'fixe' && (cfg.behavior === 'nageant' || cfg.behavior === 'fuir' || cfg.behavior === 'curieux')) {
             kinematic = 'nageant';
         }
+
+        // ── LOD : culling par distance au ROV ──
+        if (obj.group) {
+            const pos = obj.group.position;
+            const dx = pos.x - rovX;
+            const dz = pos.z - rovZ;
+            const distSq = dx * dx + dz * dz;
+
+            if (distSq > maxRenderDistSq) {
+                // Masquer au-delà de la distance de rendu, MAIS ne pas retourner :
+                // ── Point 4 (revue) : la simulation cinématique continue (path8 classique
+                // + machine à états mammifère : arithmétique pure) pour que le radar — qui
+                // dessine désormais toute la scène — reste vivant, baleine comprise.
+                // Coûts maîtrisés : les AnimationMixers sont déjà skippés dans leur boucle
+                // dédiée (mixerskip conservé) et le groupe invisible n'a aucun coût de rendu.
+                // _accDt inutile ici : dt réel chaque frame (throttling réservé aux visibles).
+                obj.group.visible = false;
+            } else {
+                // Visible dans la zone de rendu
+                obj.group.visible = true;
+
+                // Throttling : objets lointains mis à jour moins souvent
+                // ── P2 : accumulateur — le dt des frames sautées n'est plus perdu ──
+                // Il est restitué à la prochaine frame traitée (cf. dt effectif en tête
+                // de callback). Sans cela, la vitesse effective était divisée par 3 à 5
+                // et la nage avançait par bonds (corps figés, queues animées à pleine vitesse).
+                const dist = Math.sqrt(distSq);
+                let throttleMod = 0;
+                if (dist > maxRenderDist * 0.75) throttleMod = 5;
+                else if (dist > maxRenderDist * 0.5) throttleMod = 3;
+                if (throttleMod && (frame + idx) % throttleMod !== 0) {
+                    obj._accDt = Math.min((obj._accDt || 0) + dt, 0.5);  // 0.5 s max cumulés
+                    return;
+                }
+            }
+        }
+
         // Facteur d'échelle cinématique (mémorisé à la création, fallback 1)
         const sizeCat = obj.sizeCat || 1;
         // Vitesse de base : les gros animaux sont un peu plus lents (÷∜sizeCat)
-        const speed = ((cfg.speed || 1) * 0.5) / Math.pow(sizeCat, 0.25);
+        // Point 2 (revue) : clamp [0.2, 8] m/s — un "speed" JSON aberrant (négatif ou 100)
+        // ne doit pas produire une fuite inversée ou un poisson-torpille à 150 m/s.
+        const speed = THREE.MathUtils.clamp(((cfg.speed || 1) * 0.5) / Math.pow(sizeCat, 0.25), 0.2, 8);
         const behavior = cfg.behavior || 'neant';
         // "static" = fixe + pas d'animation GLB
         if (behavior === 'static') return;
@@ -2102,36 +2374,59 @@ function updateSceneObjects(dt) {
             //  NAGEANT CLASSIQUE (poissons normaux, sans cycle mammifère)
             // ═════════════════════════════════════════════════════════════
             } else {
-                // Phase inversement proportionnelle au sizeCat : compense les rayons plus grands
-                // pour que la vitesse linéaire (m/s) reste cohérente
-                p.phase += currentSpeed * dt * (0.3 / sizeCat) * p.dir;
+                // Phase = vitesse linéaire / rayon moyen → vitesse cohérente quelle que soit la taille
+                const avgR = (p.rx + p.rz) * 0.5 || 1;
+                const desiredLinSpeed = (p.linSpeed || 1) * (currentSpeed / speed); // IA boost si fuite/curieux
+                p.phase += (desiredLinSpeed / avgR) * dt * p.dir;
 
                 // --- Comportement IA : override la trajectoire si proche du ROV ---
                 if (iaOverride) {
                     // Déplacement direct vers la cible (fuir/curieux)
+                    // Pour poissons (forward=-Z) : ajouter π au yaw cible
+                    // P4 : sauf modèle (ré)aligné face +Z par la détection de heading
+                    // (headingOffset ≠ 0) → forward=+Z comme les mammifères.
+                    const isFish = (obj.config.type !== 'mamifere') && !(obj.headingOffset || 0);
+                    const iaYaw = isFish ? obj.targetYaw + Math.PI : obj.targetYaw;
                     const targetQ = new THREE.Quaternion().setFromAxisAngle(
-                        new THREE.Vector3(0, 1, 0), obj.targetYaw
+                        new THREE.Vector3(0, 1, 0), iaYaw
                     );
-                    // Les gros animaux tournent plus lentement (÷sizeCat)
                     const slerpFactor = Math.min(0.12 / sizeCat, turnSpeed * 0.08 / sizeCat * dt * 60);
                     obj.group.quaternion.slerp(targetQ, slerpFactor);
-                    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(obj.group.quaternion);
+                    const fwdDir = isFish ? -1 : 1;
+                    const forward = new THREE.Vector3(0, 0, fwdDir).applyQuaternion(obj.group.quaternion);
                     obj.group.position.addScaledVector(forward, currentSpeed * dt);
                     // Recentrer le huit sur la nouvelle position
                     p.cx = obj.group.position.x;
                     p.cz = obj.group.position.z;
+                    // Wobble de nage en mode IA (fuite = nage rapide)
+                    const iaWag = 0.15 / Math.pow(sizeCat, 0.5);
+                    const iaPhase = clock.elapsedTime * currentSpeed * 8 + idx * 1.7;
+                    const iaWobbleQ = new THREE.Quaternion().setFromEuler(
+                        new THREE.Euler(0, Math.sin(iaPhase) * iaWag, 0, 'YXZ')
+                    );
+                    obj.group.quaternion.multiply(iaWobbleQ);
                 } else {
-                    // --- Trajectoire en huit (lemniscate) ---
+                    // --- Trajectoire en huit (lemniscate) avec rotation aléatoire ---
                     const t8 = p.phase;
                     const sinT = Math.sin(t8), cosT = Math.cos(t8);
                     const denom = 1 + sinT * sinT;
-                    // Position sur la lemniscate
-                    const newX = p.cx + p.rx * cosT / denom;
-                    const newZ = p.cz + p.rz * sinT * cosT / denom;
-                    // Tangente = direction naturelle
+                    // Offset local du huit (avant rotation)
+                    const localX = p.rx * cosT / denom;
+                    const localZ = p.rz * sinT * cosT / denom;
+                    // Appliquer la rotation aléatoire du chemin
+                    const cA = p.cosA || 1, sA = p.sinA || 0;
+                    const newX = p.cx + localX * cA - localZ * sA;
+                    const newZ = p.cz + localX * sA + localZ * cA;
+                    // Tangente = direction naturelle (inversée pour les poissons : forward=-Z)
+                    // P4 — cohérence du signe fwd avec la détection de heading :
+                    // - mammifère OU modèle (ré)aligné face +Z par la détection
+                    //   (headingOffset ≠ 0 : flip π ou ±90°) → le nez suit la tangente (fwd=+1) ;
+                    // - poisson avec headingOffset = 0 (détection muette, rien à corriger)
+                    //   → convention historique conservée : GLB poissons supposés face -Z (fwd=-1).
                     const dx = newX - obj.group.position.x;
                     const dz = newZ - obj.group.position.z;
-                    const tangentYaw = Math.atan2(dx, dz);
+                    const fwd = (obj.config.type === 'mamifere' || (obj.headingOffset || 0) !== 0) ? 1 : -1;
+                    const tangentYaw = Math.atan2(dx * fwd, dz * fwd);
                     // Orientation fluide (slerp) : plus lent pour les gros animaux
                     const slerpFactor = Math.min(0.18 / sizeCat, turnSpeed * 0.12 / sizeCat * dt * 60);
                     const targetQ = new THREE.Quaternion().setFromAxisAngle(
@@ -2145,15 +2440,48 @@ function updateSceneObjects(dt) {
                     const baseY = obj.baseY != null ? obj.baseY : obj.group.position.y;
                     obj.group.position.y = baseY + Math.sin(t8 * 2) * p.yAmp;
                     obj.baseY = baseY;
+                    // ── Wobble de nage : oscillation queue (yaw) + roulis corps ──
+                    const wobbleFreq = (p.linSpeed || 1) / avgR * 6;
+                    const wobblePhase = t8 * wobbleFreq;
+                    const wagAmp = 0.12 / Math.pow(sizeCat, 0.5);
+                    const rollAmp = 0.06 / Math.pow(sizeCat, 0.5);
+                    const wobbleQ = new THREE.Quaternion().setFromEuler(
+                        new THREE.Euler(0, Math.sin(wobblePhase) * wagAmp, Math.sin(wobblePhase * 0.7) * rollAmp, 'YXZ')
+                    );
+                    obj.group.quaternion.multiply(wobbleQ);
                 }
 
                 // Limites du bassin + maintien dans la zone de profondeur
                 clampToBasin(obj.group.position, obj.config.zone);
                 // Clamp du centre du huit : empêche de sortir du bassin
                 // sans attirer vers (0,0) — évite l'effet siphon.
-                const lim = compactHalfW() * 0.8;
-                p.cx = THREE.MathUtils.clamp(p.cx, -lim, lim);
-                p.cz = THREE.MathUtils.clamp(p.cz, -lim, lim);
+                // ── P1 : en zone récif, clamp RADIAL dans l'anneau au lieu du clamp ──
+                // cubique générique (qui projetait le centre hors anneau, laissant
+                // clampToBasin écraser le poisson sur la frontière radiale chaque frame).
+                if (obj.config.zone === 'recif' || obj.config.zone === 'sol') {
+                    // ── Point 1 (revue) : adaptation dynamique aux sliders 🪸/🏖️ ──
+                    // ringGap recalculé chaque frame (reefRing hoisté) ; si l'anneau se
+                    // resserre, les rayons du huit rétrécissent (min monotone) et les
+                    // centres glissent au pire vers le milieu d'anneau — jamais de snap
+                    // hors anneau. Un agrandissement s'absorbe frame par frame.
+                    const ringGap = Math.max(1, (reefRing.outerR - reefRing.innerR) / 2 - 1);
+                    p.rx = Math.min(p.rx, ringGap);
+                    p.rz = Math.min(p.rz, ringGap);
+                    const maxExt = Math.max(p.rx, p.rz) + 1; // extension max du huit + marge sécurité
+                    // rMin jamais au-delà du milieu d'anneau (modèle dynMaxR mammifère)
+                    const rMin = Math.min(reefRing.innerR + maxExt, (reefRing.innerR + reefRing.outerR) / 2);
+                    const rMax = Math.max(rMin, reefRing.outerR - maxExt);
+                    const r = Math.hypot(p.cx, p.cz);
+                    if (r > 0.01 && (r < rMin || r > rMax)) {
+                        const rTarget = THREE.MathUtils.clamp(r, rMin, rMax);
+                        p.cx *= rTarget / r;
+                        p.cz *= rTarget / r;
+                    }
+                } else {
+                    const lim = compactHalfW() * 0.8;
+                    p.cx = THREE.MathUtils.clamp(p.cx, -lim, lim);
+                    p.cz = THREE.MathUtils.clamp(p.cz, -lim, lim);
+                }
             }
 
         // --- Mode cinématique : ancre_ondule (flore, algues, coraux mous) ---
@@ -2171,15 +2499,20 @@ function updateSceneObjects(dt) {
 
 function clampToBasin(pos, zone) {
     const lim = compactHalfW() * 0.9;
-    // Marge sous la surface
     const SURF_MARGIN = 1.5;
-    // Rayon de la fosse abyssale
-    const abyssR = WALL_POS * (diveState.abyssRadius / 100);
+    const abyssR = fondZoneRadius();
+
+    // ── Limites réelles des zones depuis les % du terrain ──
+    // Point 10 (revue) : reefRingRadii() = source unique des rayons de l'anneau récif
+    const _ring = reefRingRadii();
+    const beachInnerR = _ring.outerR;   // rayon intérieur plage (= extérieur récif)
+    const beachOuterR = WALL_POS;       // rayon extérieur plage (= mur)
+    const reefInnerR  = _ring.innerR;   // rayon intérieur récif
+    const reefOuterR  = beachInnerR;    // rayon extérieur récif = intérieur plage
 
     // ── Contraintes X/Z par zone ──
     switch (zone) {
         case 'abysse': {
-            // Confinement strict dans le périmètre de la fosse
             const dist = Math.hypot(pos.x, pos.z);
             const maxR = abyssR * 0.90;
             if (dist > maxR && dist > 0.01) {
@@ -2190,16 +2523,37 @@ function clampToBasin(pos, zone) {
             break;
         }
         case 'plage': {
-            // Maintenir dans la bande plage habitable (88%–96% de WALL_POS)
-            const innerR = WALL_POS * 0.88;
-            const outerR = WALL_POS * 0.96;
             const dist = Math.hypot(pos.x, pos.z);
-            if (dist < innerR && dist > 0.01) {
-                const scale = innerR / dist;
+            if (dist < beachInnerR && dist > 0.01) {
+                const scale = beachInnerR / dist;
                 pos.x *= scale;
                 pos.z *= scale;
-            } else if (dist > outerR) {
-                const scale = outerR / dist;
+            } else if (dist > beachOuterR * 0.98) {
+                const scale = (beachOuterR * 0.98) / dist;
+                pos.x *= scale;
+                pos.z *= scale;
+            }
+            break;
+        }
+        case 'recif':
+        case 'sol': {
+            const dist = Math.hypot(pos.x, pos.z);
+            if (dist < reefInnerR && dist > 0.01) {
+                const scale = reefInnerR / dist;
+                pos.x *= scale;
+                pos.z *= scale;
+            } else if (dist > reefOuterR) {
+                const scale = reefOuterR / dist;
+                pos.x *= scale;
+                pos.z *= scale;
+            }
+            break;
+        }
+        case 'fond': {
+            const fondMaxR = Math.max(reefInnerR * 0.95, abyssR * 1.2);
+            const dist = Math.hypot(pos.x, pos.z);
+            if (dist > fondMaxR && dist > 0.01) {
+                const scale = fondMaxR / dist;
                 pos.x *= scale;
                 pos.z *= scale;
             }
@@ -2215,10 +2569,12 @@ function clampToBasin(pos, zone) {
         case 'surface':
             pos.y = THREE.MathUtils.clamp(pos.y, CEIL_Y - 8, CEIL_Y - SURF_MARGIN);
             break;
+        case 'recif':
         case 'sol': {
-            // Plaqué au sol dynamique : terrain ± petite marge
+            // Faune : colonne d'eau complète au-dessus du récif ; flore : ancrée au sol
             const floorY = terrainMeshHeightAt(pos.x, pos.z);
-            pos.y = THREE.MathUtils.clamp(pos.y, floorY - 0.5, floorY + 5);
+            const maxY = floorY + 16; // marge large pour les poissons nageant en hauteur
+            pos.y = THREE.MathUtils.clamp(pos.y, floorY - 0.5, maxY);
             break;
         }
         case 'plage': {
@@ -2232,15 +2588,17 @@ function clampToBasin(pos, zone) {
             pos.y = THREE.MathUtils.clamp(pos.y, floorY - 0.5, floorY + 4);
             break;
         }
-        case 'fond':
-            pos.y = THREE.MathUtils.clamp(pos.y, FLOOR_Y + 0.2, FLOOR_Y + 5);
+        case 'fond': {
+            const floorY = terrainMeshHeightAt(pos.x, pos.z);
+            pos.y = THREE.MathUtils.clamp(pos.y, floorY - 0.5, floorY + 5);
             break;
+        }
         case 'pleine_eau':
             pos.y = THREE.MathUtils.clamp(pos.y, FLOOR_Y * 0.9, CEIL_Y - SURF_MARGIN);
             break;
         case 'multi_couches': {
-            // Entre surface (-2m) et plateau corallien, EXcluant la fosse
-            const yMin = -(REEF_DEPTH + diveState.reliefHeight);
+            // Entre surface (-2m) et bas du récif, EXcluant la fosse
+            const yMin = -reefBottomDepth();
             const yMax = CEIL_Y - SURF_MARGIN;
             pos.y = THREE.MathUtils.clamp(pos.y, yMin, yMax);
             // Repousser hors du rayon de la fosse si dedans
@@ -2942,7 +3300,17 @@ function loadSettings() {
         FLOOR_Y = -diveState.depth;
         WALL_POS = diveState.extent / 2;
         WALL_LIMIT = WALL_POS - 0.5;
-        console.log(`[SubSim] Réglages restaurés: depth=${diveState.depth}m extent=${diveState.extent}m vis=${diveState.visibility}m horizon=${osdConfig.horizonVisible ? 'ON' : 'OFF'} ${osdConfig.horizonOpacity}%`);
+        REEF_DEPTH = beachBottomDepth();
+        // Restaurer la position et l'orientation du ROV
+        if (saved.rovPos) {
+            posWorld.set(saved.rovPos.x || 0, saved.rovPos.y || 0, saved.rovPos.z || 0);
+        }
+        if (saved.rovRot) {
+            current.yaw   = saved.rovRot.yaw   || 0;
+            current.pitch = saved.rovRot.pitch || 0;
+            current.roll  = saved.rovRot.roll  || 0;
+        }
+        console.log(`[SubSim] Réglages restaurés: depth=${diveState.depth}m extent=${diveState.extent}m vis=${diveState.visibility}m pos=(${posWorld.x.toFixed(1)},${posWorld.y.toFixed(1)},${posWorld.z.toFixed(1)}) yaw=${(current.yaw * 180 / Math.PI).toFixed(0)}°`);
     } catch (e) { /* première visite, valeurs par défaut */ }
 }
 
@@ -2951,10 +3319,13 @@ function saveSettings() {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify({
             physState: { inertia: physState.inertia, gain: physState.gain, sens: physState.sens, rollSens: physState.rollSens, pitchSens: physState.pitchSens, speedBoost: physState.speedBoost },
             diveState: { depth: diveState.depth, visibility: diveState.visibility, extent: diveState.extent,
-                         reliefHeight: diveState.reliefHeight, abyssDepth: diveState.abyssDepth, abyssRadius: diveState.abyssRadius,
+                         beachExtent: diveState.beachExtent, beachDepthPct: diveState.beachDepthPct,
+                         reefExtent: diveState.reefExtent, reefDepthPct: diveState.reefDepthPct,
                          led: diveState.led, ledIntensity: diveState.ledIntensity, ledTilt: diveState.ledTilt },
             osdConfig: { horizonVisible: osdConfig.horizonVisible, horizonOpacity: osdConfig.horizonOpacity,
-                         horizonDiameter: osdConfig.horizonDiameter }
+                         horizonDiameter: osdConfig.horizonDiameter },
+            rovPos: { x: posWorld.x, y: posWorld.y, z: posWorld.z },
+            rovRot: { yaw: current.yaw, pitch: current.pitch, roll: current.roll },
         }));
     } catch (e) {}
 }
@@ -2979,9 +3350,10 @@ function syncSlidersUI() {
     sync('sim-depth',     diveState.depth,     v => v + ' m');
     sync('sim-extent',    diveState.extent,    v => v + ' m');
     sync('sim-visibility', diveState.visibility, v => v + ' m');
-    sync('sim-relief',    diveState.reliefHeight, v => v + ' m');
-    sync('sim-abyss-depth', diveState.abyssDepth, v => v + ' m');
-    sync('sim-abyss-radius', diveState.abyssRadius, v => v + ' %');
+    sync('sim-beach-extent', diveState.beachExtent, v => v + ' %');
+    sync('sim-beach-depth',  diveState.beachDepthPct, v => v + ' %');
+    sync('sim-reef-extent',  diveState.reefExtent, v => v + ' %');
+    sync('sim-reef-depth',   diveState.reefDepthPct, v => v + ' %');
     // LED
     sync('sim-led-intensity', diveState.ledIntensity, v => v + ' %');
     sync('sim-led-tilt', diveState.ledTilt, v => v + '°');
@@ -3022,15 +3394,25 @@ function bindSliders() {
         scene.fog = new THREE.FogExp2(0x0b1020, 1.7 / diveState.visibility);
         updateTerrainBiomeUniforms();
     });
-    bind('sim-relief', 'reliefHeight', diveState, v => v + ' m', () => {
-        if (diveState.terrain && terrainMesh) updateTerrainGeometry();
-    });
-    bind('sim-abyss-depth', 'abyssDepth', diveState, v => v + ' m', () => {
-        if (diveState.terrain && terrainMesh) updateTerrainGeometry();
-    });
-    bind('sim-abyss-radius', 'abyssRadius', diveState, v => v + ' %', () => {
-        if (diveState.terrain && terrainMesh) updateTerrainGeometry();
-    });
+    // ── Point 8 (revue) : coalescence des reconstructions lourdes pendant le drag ──
+    // Chaque 'input' des sliders zones déclenchait la reconstruction complète
+    // (murs + surface + caustiques + god rays + terrain ~102k vertices × fbm à extent 1000)
+    // → jank sur Pi 5. Les événements sont regroupés : au plus une reconstruction
+    // planifiée à la fois ; le timer lit diveState à son exécution → le DERNIER état
+    // du drag est toujours appliqué (~80 ms après le dernier mouvement en continu).
+    let _zoneRebuildTimer = null;
+    const rebuildTerrain = () => {
+        if (_zoneRebuildTimer) return;  // une reconstruction est déjà planifiée : ignorer
+        _zoneRebuildTimer = setTimeout(() => {
+            _zoneRebuildTimer = null;
+            applyBasinSize();
+            if (diveState.terrain && terrainMesh) { updateTerrainGeometry(); updateTerrainBiomeUniforms(); }
+        }, 80);
+    };
+    bind('sim-beach-extent', 'beachExtent', diveState, v => v + ' %', rebuildTerrain);
+    bind('sim-beach-depth',  'beachDepthPct', diveState, v => v + ' %', rebuildTerrain);
+    bind('sim-reef-extent',  'reefExtent', diveState, v => v + ' %', rebuildTerrain);
+    bind('sim-reef-depth',   'reefDepthPct', diveState, v => v + ' %', rebuildTerrain);
 
     // --- Projecteurs LED ---
     bind('sim-led-intensity', 'ledIntensity', diveState, v => v + ' %', () => applyLed());
@@ -3048,6 +3430,8 @@ function applyBasinSize() {
     FLOOR_Y = -diveState.depth;
     WALL_POS = Math.max(10, diveState.extent / 2);
     WALL_LIMIT = WALL_POS - 0.5;
+    // REEF_DEPTH dynamique : profondeur du sommet du récif (= bas de la plage)
+    REEF_DEPTH = beachBottomDepth();
     const far = Math.max(100, diveState.depth * 2.5, diveState.extent * 1.8);
     camera.far = far;
     camera.updateProjectionMatrix();
@@ -3084,7 +3468,7 @@ function applyBasinSize() {
 // ===========================================================================
 // PANNEAUX FLOTTANTS (drag + collapse)
 // ===========================================================================
-const PANEL_IDS = ['sim-actions-panel', 'sim-phys-panel', 'sim-dive-panel', 'sim-osd-panel', 'sim-motors-panel', 'sim-dof-panel', 'sim-telemetry-panel'];
+const PANEL_IDS = ['sim-actions-panel', 'sim-phys-panel', 'sim-dive-panel', 'sim-osd-panel', 'sim-motors-panel', 'sim-dof-panel', 'sim-telemetry-panel', 'sim-radar-panel'];
 const PANELS_KEY = 'subsim.panels';
 let panelsState = {};
 let panelZTop = 20;
@@ -3156,11 +3540,15 @@ function initFloatingPanels() {
 const _SURFACE_VS = /* glsl */`
 uniform float uTime;
 uniform float uWaveHeight;
+uniform float uBeachInnerDist;   // rayon intérieur zone plage (m)
+uniform float uBeachOuterDist;   // rayon extérieur zone plage = WALL_POS (m)
+uniform float uBeachBoost;       // multiplicateur amplitude sur la plage (2-4×)
 varying vec3 vWorldPos;
 varying vec3 vNormal;
 varying float vFoam;
 varying float vElevation;
 varying vec3 vViewDir;
+varying float vBeachT;           // 0 = pleine mer, 1 = zone plage
 #include <fog_pars_vertex>
 
 // Vague Gerstner avec tangentes partielles pour normales analytiques
@@ -3182,7 +3570,12 @@ vec3 gerstner(vec2 pos, float amp, float freq, float speed, vec2 dir, float stee
 void main() {
     vec3 p = position;
     float t = uTime;
-    float h = uWaveHeight;
+    // ── Boost plage : amplification des vagues au-dessus de la zone plage (shoaling) ──
+    float dist = length(p.xz);
+    float beachRange = max(uBeachOuterDist - uBeachInnerDist, 0.01);
+    float beachT = smoothstep(uBeachInnerDist, uBeachOuterDist, dist);
+    // Le boost augmente en allant vers le bord (eaux moins profondes = vagues plus fortes)
+    float h = uWaveHeight * (1.0 + (uBeachBoost - 1.0) * beachT);
     // 6 vagues de fréquences/directions/amplitudes variées pour réalisme
     float d1, d2;
     vec3 w1 = gerstner(p.xz, h*0.45, 0.70, 1.10, normalize(vec2( 1.0,  0.3)), 0.55, t, d1, d2);
@@ -3224,7 +3617,11 @@ void main() {
     // Écume : proportionnelle à l'élévation au-dessus du niveau moyen
     float waveMax = h * 1.1;
     vFoam = smoothstep(waveMax * 0.35, waveMax * 0.75, elevation);
+    // Écume supplémentaire en zone plage (brassage continu)
+    float beachChurn = sin(t * 2.5 + dist * 0.8) * 0.5 + 0.5;
+    vFoam = max(vFoam, beachT * beachChurn * 0.6);
     vElevation = elevation;
+    vBeachT = beachT;
     vWorldPos = (modelMatrix * vec4(p, 1.0)).xyz;
     vNormal = normalize(normalMatrix * n);
     vViewDir = cameraPosition - vWorldPos;
@@ -3242,6 +3639,7 @@ varying vec3 vNormal;
 varying float vFoam;
 varying float vElevation;
 varying vec3 vViewDir;
+varying float vBeachT;
 #include <fog_pars_fragment>
 
 // Fresnel Schlick : approximation physique réaliste
@@ -3301,11 +3699,20 @@ void main() {
         // Reflets du soleil à travers les vagues : taches lumineuses mobiles
         float sunUnder = pow(max(dot(N, uSunDir), 0.0), 6.0);
         underCol += vec3(0.45, 0.65, 0.75) * sunUnder;
+        // ── Boost plage : vagues plus puissantes vues de dessous ──
+        // Lumière solaire renforcée traversant les crêtes de plage
+        float beachSun = pow(max(dot(N, uSunDir), 0.0), 3.0) * vBeachT * 1.5;
+        underCol += vec3(0.6, 0.85, 0.95) * beachSun;
+        // Teinte plus claire/turquoise au-dessus de la plage
+        underCol = mix(underCol, vec3(0.15, 0.55, 0.65), vBeachT * 0.4);
         // Écume vue d'en dessous : zones blanchâtres aux crêtes
-        float underFoam = vFoam * 0.55;
-        underCol = mix(underCol, vec3(0.75, 0.85, 0.90), underFoam);
+        // Écume beaucoup plus prononcée en zone plage (déferlement)
+        float underFoam = vFoam * (0.55 + vBeachT * 0.45);
+        underCol = mix(underCol, vec3(0.85, 0.92, 0.96), underFoam);
         color = underCol;
         baseAlpha = mix(0.65, 0.95, underFresnel);
+        // Alpha plus élevé en zone plage pour un effet de plafond de vagues
+        baseAlpha = mix(baseAlpha, min(baseAlpha + 0.2, 0.98), vBeachT);
     }
 
     // Specular soleil — glitter path (chemin de lumière sur l'eau)
@@ -3340,10 +3747,21 @@ function buildSurface() {
     const geo = new THREE.PlaneGeometry(size, size, segs, segs);
     geo.rotateX(-Math.PI / 2);
     const sunDirection = new THREE.Vector3(6, 12, 8).normalize();
+    // Calcul des limites de la zone plage pour le boost de vagues
+    const beachFrac = diveState.beachExtent / 100;
+    const beachInnerDist = WALL_POS * (1.0 - beachFrac);
+    // Boost proportionnel à la profondeur de la plage (% de profondeur totale)
+    const beachDepthFrac = diveState.beachDepthPct / 100;
+    // Point 9 (revue) : 1× à 4× selon profondeur plage — conforme à la spec du shader
+    // (l'ancienne formule ×10 donnait jusqu'à ×13, contredisant la plage annoncée 2-4×).
+    const beachBoost = 1.0 + 3.0 * beachDepthFrac;
     const mat = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 },
             uWaveHeight: { value: envState.waveHeight },
+            uBeachInnerDist: { value: beachInnerDist },
+            uBeachOuterDist: { value: WALL_POS },
+            uBeachBoost: { value: beachBoost },
             uSunDir: { value: sunDirection },
             ...THREE.UniformsLib.fog,
         },
@@ -3686,7 +4104,7 @@ function animate() {
     }
 
     // Faune/flore
-    updateSceneObjects(dt);
+    try { updateSceneObjects(dt); } catch (e) { console.error('[SubSim] updateSceneObjects erreur:', e.message, e.stack); }
     const time = clock.elapsedTime;
     algaeUniforms.uTime.value = time;
     algaeUniforms.uSway.value = envState.current;
@@ -3725,6 +4143,166 @@ function animate() {
         controls.update();
     }
     renderer.render(scene, isFpvActive ? fpvCamera : camera);
+    // Mini-radar 2D
+    drawRadar();
+}
+
+// ===========================================================================
+// MINI-RADAR 2D (vue du dessus du bassin)
+// ===========================================================================
+let _radarCtx = null;
+let _radarInfo = null;
+
+function initRadar() {
+    const canvas = document.getElementById('sim-radar-canvas');
+    if (canvas) _radarCtx = canvas.getContext('2d');
+    _radarInfo = document.getElementById('sim-radar-info');
+}
+
+/** Dessine la mini-carte radar 2D (appelé chaque frame si panneau visible) */
+function drawRadar() {
+    if (!_radarCtx) return;
+    // Vérifier si le panneau n'est pas replié
+    const panel = document.getElementById('sim-radar-panel');
+    if (!panel || panel.classList.contains('collapsed')) return;
+
+    const ctx = _radarCtx;
+    const W = ctx.canvas.width;
+    const H = ctx.canvas.height;
+    const half = W / 2;
+    // Échelle : WALL_POS (demi-largeur bassin) → half pixels
+    const scale = half / WALL_POS;
+
+    // Fond sombre + grille
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#060d1a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grille (tous les 10m)
+    ctx.strokeStyle = 'rgba(53,208,186,0.08)';
+    ctx.lineWidth = 0.5;
+    for (let m = -WALL_POS; m <= WALL_POS; m += 10) {
+        const px = half + m * scale;
+        const py = half + m * scale;
+        ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(W, py); ctx.stroke();
+    }
+
+    // Limites du bassin (carré)
+    ctx.strokeStyle = 'rgba(53,208,186,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(0, 0, W, H);
+
+    // Fosse abyssale (cercle central)
+    const abyssR = fondZoneRadius();
+    ctx.strokeStyle = 'rgba(100,140,200,0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(half, half, abyssR * scale, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Zone plage (cercle pointillé)
+    // Point 3 (revue) : rayon réel de la limite intérieur plage = extérieur récif,
+    // cohérent avec le slider 🏖️ beachExtent (au lieu du 0.88 × WALL_POS codé en dur).
+    ctx.strokeStyle = 'rgba(200,177,138,0.2)';
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.arc(half, half, reefRingRadii().outerR * scale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Objets de scène (faune/flore) — petits points colorés
+    // ── R1 : TOUS les objets sont dessinés, y compris ceux masqués par le LOD ──
+    // (au-delà de la distance de rendu) : le radar représente ainsi toute la scène,
+    // les objets hors visibilité étant affichés en style atténué.
+    // ── R2 : couleurs différenciées par type, lisibles sur le fond sombre :
+    // faune nageante → teal vif ; mammifère → ambre + point plus grand ;
+    // flore/objet → gris discret. (Remplace l'ancien code par zone, dont le
+    // vert-olive rgba(58,79,71,0.5) était illisible sur le fond #060d1a.)
+    if (scene3dObjects) {
+        for (const obj of scene3dObjects) {
+            if (!obj.group) continue;
+            const objType = obj.config.type || 'faune';
+            const lodHidden = !obj.group.visible;  // masqué par LOD (hors distance de rendu)
+            let size, color;
+            if (objType === 'mamifere') {
+                size = lodHidden ? 3 : 5;          // mammifère : point ambre plus grand
+                color = lodHidden ? 'rgba(230,160,60,0.35)' : 'rgba(255,170,40,0.95)';
+            } else if (objType === 'faune') {
+                size = lodHidden ? 2 : 3;          // faune nageante : teal vif
+                color = lodHidden ? 'rgba(120,160,180,0.3)' : 'rgba(72,219,200,0.9)';
+            } else {
+                size = lodHidden ? 1.5 : 2;        // flore/objet : gris discret
+                color = lodHidden ? 'rgba(150,160,170,0.18)' : 'rgba(150,165,175,0.45)';
+            }
+            const px = half + obj.group.position.x * scale;
+            const py = half + obj.group.position.z * scale;
+            if (px < 0 || px > W || py < 0 || py > H) continue;
+            ctx.fillStyle = color;
+            ctx.fillRect(px - size / 2, py - size / 2, size, size);
+        }
+    }
+
+    // ── ROV : point lumineux + flèche de cap ──
+    const rx = half + posWorld.x * scale;
+    const ry = half + posWorld.z * scale;
+
+    // Halo glow
+    const grd = ctx.createRadialGradient(rx, ry, 0, rx, ry, 10);
+    grd.addColorStop(0, 'rgba(53,208,186,0.5)');
+    grd.addColorStop(1, 'rgba(53,208,186,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(rx, ry, 10, 0, Math.PI * 2); ctx.fill();
+
+    // Point ROV
+    ctx.fillStyle = '#35d0ba';
+    ctx.beginPath(); ctx.arc(rx, ry, 3.5, 0, Math.PI * 2); ctx.fill();
+
+    // Flèche de cap — convention réelle : l'avant visuel du ROV est -X
+    // (cf. initProjectors : px = -MODEL_LENGTH/2). Le vecteur local -X tourné de yaw
+    // donne en monde (-cos yaw, 0, sin yaw) → flèche radar (-cos yaw, sin yaw).
+    // Le décalage -π/2 combiné à (sin, cos) ci-dessous produit exactement ce vecteur
+    // (commentaire historique « face à -Z, +π » inexact, code inchangé).
+    const rawYaw = modelGroup ? modelGroup.rotation.y : 0;
+    const yaw = rawYaw - Math.PI / 2;
+    const arrowLen = 12;
+    const ax = rx + Math.sin(yaw) * arrowLen;
+    const ay = ry + Math.cos(yaw) * arrowLen;
+    ctx.strokeStyle = '#35d0ba';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(ax, ay); ctx.stroke();
+
+    // Pointe de flèche (barbes vers l'arrière depuis la pointe)
+    const tipAngle = 0.45;
+    const tipLen = 5;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(
+        ax - Math.sin(yaw + tipAngle) * tipLen,
+        ay - Math.cos(yaw + tipAngle) * tipLen
+    );
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(
+        ax - Math.sin(yaw - tipAngle) * tipLen,
+        ay - Math.cos(yaw - tipAngle) * tipLen
+    );
+    ctx.stroke();
+
+    // Cercle LOD (rayon de visibilité autour du ROV)
+    const lodR = diveState.visibility;
+    ctx.strokeStyle = 'rgba(53,208,186,0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.arc(rx, ry, lodR * scale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Info texte (cap réel = direction avant du ROV)
+    if (_radarInfo) {
+        const hdg = ((yaw * 180 / Math.PI) % 360 + 360) % 360;
+        _radarInfo.textContent = `X: ${posWorld.x.toFixed(0)}m  Z: ${posWorld.z.toFixed(0)}m  Cap: ${hdg.toFixed(0).padStart(3, '0')}°`;
+    }
 }
 
 // ===========================================================================
@@ -3742,6 +4320,7 @@ try {
     applyBasinSize();        // Appliquer l'étendue restaurée
     applyFog();              // Brouillard selon visibilité
     initActionButtons();     // Boutons + raccourcis clavier
+    initRadar();             // Mini-carte radar 2D
     loadModel();
     // Charger l'environnement AVANT de construire terrain+vie+GLB
     // (buildWalls/buildTerrain sont appelés dans loadEnvironmentConfig)
@@ -3756,6 +4335,11 @@ try {
     window.addEventListener('gamepadconnected', loadGamepadProfile);
     window.addEventListener('storage', e => { if (e.key === GP_LS_MAPPING_KEY) loadGamepadProfile(); });
     window.addEventListener('gamepad-mapping-changed', loadGamepadProfile);
+    // Sauvegarder la position ROV en quittant la page
+    window.addEventListener('beforeunload', saveSettings);
+    window.addEventListener('visibilitychange', () => { if (document.hidden) saveSettings(); });
+    // Sauvegarde périodique de la position (toutes les 5s)
+    setInterval(saveSettings, 5000);
     animate();
     // Vue FPV par défaut
     setFpv(true);
