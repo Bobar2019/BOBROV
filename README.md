@@ -1,9 +1,21 @@
-# BOB-ROV — Système de Contrôle pour ROV
+# BOB-ROV - Cockpit Lite
+
+![Aperçu BOB-ROV](docs/Menu.png)
 
 **Version :** 2.0.0  
 **Plateforme :** Raspberry Pi 5  
 **Auteur :** Didier Dero  
 **Date :** Août 2026  
+
+---
+
+## 📸 Aperçu de l'Interface
+
+### Menu Principal
+![Menu Principal](docs/Menu.png)
+
+### Simulateur Sous-marin (V5)
+![Simulateur](docs/Sub_Simulator.png)
 
 ---
 
