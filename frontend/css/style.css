@@ -42,7 +42,29 @@
 
 /* === RESET === */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { height: 100%; font-family: var(--font-sans); font-size: 14px; color: var(--text-primary); background: var(--bg-primary); overflow: hidden; transition: background var(--transition), color var(--transition); }
+html, body { height: 100%; font-family: var(--font-sans); font-size: 14px; color: var(--text-primary); overflow: hidden; transition: color var(--transition); }
+
+/* Image de fond sous-marine + pulsation lumineuse */
+body {
+    background: #020b14 url('/static/models/surface2.jpg') no-repeat center center fixed !important;
+    background-size: cover !important;
+    min-height: 100vh;
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(100, 200, 255, 0.18), transparent 75%);
+    animation: oceanPulse 6s ease-in-out infinite alternate;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes oceanPulse {
+    0%   { opacity: 0.2; }
+    100% { opacity: 0.7; }
+}
 
 /* === LAYOUT === */
 .app-container { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -56,11 +78,14 @@ html, body { height: 100%; font-family: var(--font-sans); font-size: 14px; color
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    position: relative;
     overflow-y: auto;
 }
 
 .header-content {
     margin-bottom: 40px;
+    position: relative;
+    z-index: 1;
 }
 
 .index-header h1 {
@@ -94,6 +119,8 @@ html, body { height: 100%; font-family: var(--font-sans); font-size: 14px; color
     padding: 20px;
     max-width: 900px;
     width: 100%;
+    position: relative;
+    z-index: 1;
 }
 
 @media (min-width: 768px) {
@@ -166,6 +193,69 @@ html, body { height: 100%; font-family: var(--font-sans); font-size: 14px; color
     box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
 }
 
+/* Le header et les tuiles passent au-dessus du fond */
+.index-header {
+    position: relative;
+    z-index: 1;
+}
+
+.main-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    display: none;
+    position: relative;
+    z-index: 2;
+    background: rgba(2, 11, 20, 0.88);
+}
+.main-content.visible { display: block; }
+
+/* ── Amélioration contraste tuiles ── */
+.nav-tile {
+    background: rgba(12, 22, 40, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(60, 140, 220, 0.15);
+}
+
+.nav-tile::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(80,200,255,0.45), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.nav-tile:hover::before {
+    opacity: 1;
+}
+
+.nav-tile:hover {
+    background: rgba(18, 38, 70, 0.88);
+    border-color: rgba(60, 160, 255, 0.45);
+    box-shadow:
+        0 8px 40px rgba(0, 120, 255, 0.18),
+        inset 0 1px 0 rgba(100,200,255,0.08);
+}
+
+.theme-day .nav-tile {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 80, 160, 0.15);
+}
+.theme-day .nav-tile:hover {
+    background: rgba(255, 255, 255, 0.90);
+    border-color: rgba(0, 80, 160, 0.35);
+    box-shadow:
+        0 8px 40px rgba(0, 100, 200, 0.15),
+        inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
 /* Bouton retour */
 .btn-back {
     position: fixed;
@@ -215,8 +305,7 @@ html, body { height: 100%; font-family: var(--font-sans); font-size: 14px; color
 .theme-toggle:hover { background: var(--bg-input); }
 
 /* === MAIN CONTENT === */
-.main-content { flex: 1; overflow-y: auto; padding: 14px; display: none; }
-.main-content.visible { display: block; }
+
 .tile-panel { display: none; animation: fadeIn 0.4s ease; }
 .tile-panel.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

@@ -150,7 +150,6 @@ canvas { display: block; }
 #sim-motors-panel { top: 300px; right: 14px; width: 246px; }
 #sim-dof-panel { bottom: 14px; left: 14px; width: 220px; }
 #sim-telemetry-panel { bottom: 14px; right: 14px; width: 220px; }
-#sim-help { bottom: 14px; right: 480px; font-size: 11px; color: var(--muted); max-width: 230px; line-height: 1.5; }
 #sim-radar-panel { bottom: 14px; right: 248px; width: 216px; }
 
 /* Mini-radar canvas & info */

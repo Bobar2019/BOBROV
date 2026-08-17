@@ -96,7 +96,7 @@ const envMats = [];
 // --- Projecteurs LED (projecteur.glb) ---
 let projGroup = null;
 let projSpots = [];
-const LED_MAX_INTENSITY = 320;
+const LED_MAX_INTENSITY = 8000;
 
 // --- Vie sous-marine (InstancedMesh procéduraux) ---
 const ALGAE_MAX_TUFTS = 500, ALGAE_BLADES = 5, FISH_MAX = 500;
@@ -3990,11 +3990,15 @@ function makeProjectorSpot(x, y, z, zTargetPinch) {
     const s = new THREE.SpotLight(0xdff2ff, 0, 60, THREE.MathUtils.degToRad(26), 0.45, 1.6);
     s.castShadow = true;
     s.shadow.mapSize.set(1024, 1024);
-    s.shadow.bias = -0.0005;
+    s.shadow.bias = -0.002;
+    s.shadow.normalBias = 0.02;
+    s.shadow.camera.near = 0.01;
+    s.shadow.camera.far = 60;
     s.position.set(x - 0.01, y, z);
     s.target.position.set(x - 3.0, y - 0.35, zTargetPinch);
     projGroup.add(s);
     projGroup.add(s.target);
+    s.target.updateMatrixWorld(true);
     return s;
 }
 
@@ -4025,18 +4029,37 @@ function loadProjectorModel() {
 }
 
 // Ajuste les SpotLights aux positions réelles des optiques du GLB.
+// Convertit la bounding box monde en coordonnées locales de projGroup
+// pour éviter un décalage quand modelGroup n'est pas à l'origine.
 function fitSpotsToProjector(proj) {
-    const box = new THREE.Box3().setFromObject(proj);
-    if (box.isEmpty()) return;
-    const cy = (box.min.y + box.max.y) / 2;
-    const zSpan = box.max.z - box.min.z;
-    const front = box.min.x - 0.005;
+    const worldBox = new THREE.Box3().setFromObject(proj);
+    if (worldBox.isEmpty()) return;
+    // Convertir les coins monde en coordonnées locales de projGroup
+    const invMatrix = new THREE.Matrix4().copy(projGroup.matrixWorld).invert();
+    const localMin = worldBox.min.clone().applyMatrix4(invMatrix);
+    const localMax = worldBox.max.clone().applyMatrix4(invMatrix);
+    // Réordonner (l'inversion peut inverser les axes)
+    const bMin = new THREE.Vector3(
+        Math.min(localMin.x, localMax.x),
+        Math.min(localMin.y, localMax.y),
+        Math.min(localMin.z, localMax.z)
+    );
+    const bMax = new THREE.Vector3(
+        Math.max(localMin.x, localMax.x),
+        Math.max(localMin.y, localMax.y),
+        Math.max(localMin.z, localMax.z)
+    );
+    const cy = (bMin.y + bMax.y) / 2;
+    const zSpan = bMax.z - bMin.z;
+    const front = bMin.x - 0.04; // 4 cm devant la face avant (hors du mesh)
     const podZ = Math.max(0.04, zSpan * 0.28);
     projSpots.forEach((s, i) => {
         const side = i === 0 ? 1 : -1;
         s.position.set(front, cy, side * podZ);
         s.target.position.set(front - 3.0, cy - 0.35, side * podZ * 0.25);
+        s.target.updateMatrixWorld(true);
     });
+    console.log(`[SubSim] fitSpotsToProjector: front=${front.toFixed(3)}m cy=${cy.toFixed(3)}m podZ=±${podZ.toFixed(3)}m (zSpan=${zSpan.toFixed(3)}m)`);
 }
 
 // Applique l'état LED : intensité des SpotLights + tilt du groupe pivot.
@@ -4051,6 +4074,7 @@ function applyLed() {
     const tRow = document.getElementById('sim-led-tilt-row');
     if (iRow) iRow.classList.toggle('disabled', !diveState.led);
     if (tRow) tRow.classList.toggle('disabled', !diveState.led);
+    console.log(`[SubSim] LED: ${diveState.led ? 'ON' : 'OFF'} intensity=${cd.toFixed(0)} cd (${diveState.ledIntensity}%), tilt=${diveState.ledTilt}°, spots=${projSpots.length}`);
 }
 
 function applyFog() {
