@@ -88,12 +88,57 @@ body::before {
     z-index: 1;
 }
 
+/* Rangée titre : canvas 3D + texte alignés horizontalement */
+.header-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 20px 32px;
+    background: rgba(12, 22, 40, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(80, 180, 255, 0.25);
+    border-radius: 14px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+#rov-logo-canvas {
+    width: 160px;
+    height: 160px;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 8px rgba(0, 255, 102, 0.5));
+}
+
+@media (max-width: 480px) {
+    #rov-logo-canvas {
+        width: 110px;
+        height: 110px;
+    }
+    .header-title-row { gap: 12px; }
+}
+
+/* Voile dégradé sombre en haut pour atténuer l'éblouissement du soleil */
+.header-content::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 140px;
+    background: linear-gradient(180deg, rgba(0, 10, 20, 0.45), transparent);
+    pointer-events: none;
+    z-index: -1;
+}
+
 .index-header h1 {
     font-size: 2.5rem;
     font-weight: 700;
     color: var(--text-primary);
     margin: 0;
     position: relative;
+    text-align: left;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 0, 0, 0.7);
 }
 
 .index-header h1::after {
@@ -102,14 +147,16 @@ body::before {
     width: 75%;
     height: 3px;
     background: linear-gradient(90deg, var(--accent), #00d4ff);
-    margin: 15px auto 0;
+    margin: 15px 0 0;
     border-radius: 2px;
 }
 
 .index-header p {
-    color: var(--text-secondary);
+    color: #c8d6e5;
     font-size: 1.1rem;
     margin-top: 10px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95), 0 0 20px rgba(0, 0, 0, 0.6);
+    letter-spacing: 0.5px;
 }
 
 .nav-grid {
@@ -215,7 +262,8 @@ body::before {
     background: rgba(12, 22, 40, 0.72);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(60, 140, 220, 0.15);
+    border: 1px solid rgba(80, 180, 255, 0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .nav-tile::before {
@@ -236,10 +284,11 @@ body::before {
 
 .nav-tile:hover {
     background: rgba(18, 38, 70, 0.88);
-    border-color: rgba(60, 160, 255, 0.45);
+    border-color: rgba(80, 200, 255, 0.6);
     box-shadow:
         0 8px 40px rgba(0, 120, 255, 0.18),
-        inset 0 1px 0 rgba(100,200,255,0.08);
+        0 0 20px rgba(80, 200, 255, 0.15),
+        inset 0 1px 0 rgba(100,200,255,0.12);
 }
 
 .theme-day .nav-tile {

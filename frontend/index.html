@@ -19,14 +19,20 @@
     </script>
     <link rel="stylesheet" href="css/gamepad-nav.css">
     <link rel="stylesheet" href="css/scene3d.css">
+    <script type="module" src="js/rov_logo.js"></script>
 </head>
 <body class="theme-night">
     <div class="app-container">
         <!-- ========== HEADER + NAVIGATION GRILLE ========== -->
         <header class="index-header" id="nav-home">
             <div class="header-content">
-                <h1>BOB-ROV</h1>
-                <p>Cockpit de pilotage sous-marin</p>
+                <div class="header-title-row">
+                    <canvas id="rov-logo-canvas" width="160" height="160"></canvas>
+                    <div>
+                        <h1>BOB-ROV</h1>
+                        <p>Cockpit de pilotage sous-marin</p>
+                    </div>
+                </div>
             </div>
             <nav class="nav-grid">
                 <button class="nav-tile" data-tile="dashboard" onclick="App.switchTile('dashboard')">
