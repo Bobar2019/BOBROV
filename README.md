@@ -332,39 +332,56 @@ Bascule entre vue écran classique et mode stéréoscopique lunettes FPV via le 
 
 ### Installation
 
-```bash
-# 1. Dépendances système obligatoires
-sudo apt update && sudo apt install -y git python3-pip python3-venv python3-dev build-essential libgl1 libglib2.0-0 i2c-tools
+**1. Dépendances système obligatoires**
 
-# 2. Cloner le projet
+```bash
+sudo apt update && sudo apt install -y git python3-pip python3-venv python3-dev build-essential libgl1 libglib2.0-0 i2c-tools
+```
+
+**2. Cloner le projet**
+
+```bash
 cd /home/bob
 git clone https://github.com/Bobar2019/BOBROV.git cockpit-lite-rov
 cd cockpit-lite-rov
+```
 
-# 3. Environnement virtuel Python
+**3. Environnement virtuel Python**
+
+```bash
 mkdir -p logs
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+```
 
-# 4. Service systemd (démarrage automatique)
+**4. Service systemd (démarrage automatique)**
+
+```bash
 sudo cp bob-rov.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable bob-rov.service
 sudo systemctl start bob-rov.service
 ```
 
+---
+
 ### Démarrage
+
+**Démarrage manuel**
+
 ```bash
-# Démarrage manuel
 cd /home/bob/cockpit-lite-rov
 source venv/bin/activate
 python main.py
+```
 
-# Ou gestion via le service systemd
+**Démarrage par service**
+
+```bash
+sudo systemctl start bob-rov.service
 sudo systemctl status bob-rov.service
-sudo journalctl -u bob-rov.service -f
 ```
 
 ### Accès
