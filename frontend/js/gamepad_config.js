@@ -15,7 +15,7 @@ const GamepadConfig = (() => {
     // Mapping courant { buttons: { 'CROSS'|'L1+CROSS': {function, action} }, axes: { 'LEFT_Y': {function, invert, deadzone?, sensitivity?} } }
     let currentMapping = { buttons: {}, axes: {} };
 
-    // Clé localStorage : mapping consommé en direct par gamepad.js et mapping3d.js
+    // Clé localStorage : mapping consommé en direct par gamepad.js, simulator3d.js et les modules 3D
     const LS_KEY = 'rov.gamepad.mapping';
 
     // Statuts des fonctions chargés depuis /api/actions/functions : { name: {status, description} }

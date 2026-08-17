@@ -260,15 +260,6 @@ class WebServer:
                 return FileResponse(str(index_path), media_type="text/html")
             return HTMLResponse("<h1>BOB-ROV</h1><p>Frontend non trouvé.</p>")
 
-        # === VISUALISEUR 3D (test mappage télécommande) ===
-        @self.app.get("/mapping3d", response_class=HTMLResponse)
-        async def mapping3d():
-            """Page dédiée au visualiseur 3D Three.js du ROV"""
-            page_path = Path("frontend/mapping3d.html")
-            if page_path.exists():
-                return FileResponse(str(page_path), media_type="text/html")
-            return HTMLResponse("<h1>Visualiseur 3D</h1><p>Page non trouvée.</p>")
-
         # === SUB-SIMULATOR (simulateur sous-marin 3D) ===
         @self.app.get("/subsim", response_class=HTMLResponse)
         async def subsim():
