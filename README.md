@@ -24,7 +24,7 @@ BOB-ROV est un système de contrôle embarqué pour sous-marin téléguidé (ROV
 ### Stack
 - **Backend** : Python — FastAPI + WebSockets + OpenCV
 - **Frontend** : HTML5 + CSS3 + JavaScript Vanilla + Three.js
-- **Rendu 3D** : Three.js v0.160 (via CDN jsdelivr, importmap ES modules)
+- **Rendu 3D** : Three.js v0.170 (via CDN unpkg, importmap ES modules)
 - **Base de données** : Fichiers JSON (profils, configuration, scènes 3D, layouts OSD)
 - **Communication** : REST + WebSockets (temps réel)
 - **Firmware** : ESP32-S3 (IMU 6 axes + contrôle moteurs PWM via I2C)
@@ -58,7 +58,6 @@ cockpit-lite-rov/
 ├── frontend/
 │   ├── index.html           # Interface principale (SPA par tuiles)
 │   ├── simulator3d.html     # Sub-Simulator (simulation 3D sous-marine)
-│   ├── mapping3d.html       # Visualiseur 3D manette (scène complète)
 │   ├── css/
 │   │   ├── style.css        # Styles principaux
 │   │   ├── gamepad.css      # Styles config manette
@@ -78,9 +77,10 @@ cockpit-lite-rov/
 │       ├── gamepad_test.js  # Test manette en direct
 │       ├── gamepad_nav.js   # Navigation interface par manette
 │       ├── simulator3d.js   # Sub-Simulator (moteur 3D, physique 6DOF, faune/flore)
+│       ├── rov_logo.js      # Logo 3D wireframe animé dans le header
 │       ├── scene_config.js  # Configuration IHM Scène 3D (modèles GLB, faune, décor)
-│       ├── mapping3d.js     # Scène 3D complète (test manette avancé)
-│       ├── simulation.js    # Mode simulation (coté cockpit)
+│       ├── scene3d_viewer.js# Inspecteur 3D autonome pour modèles GLB
+│       ├── simulation.js    # Mode simulation (côté cockpit)
 │       ├── camera_config.js # Configuration caméras
 │       ├── wifi.js          # Gestion WiFi
 │       ├── goggle.js        # Mode lunettes FPV/VR
@@ -330,30 +330,71 @@ Bascule entre vue écran classique et mode stéréoscopique lunettes FPV via le 
 - IMU supportée : ADXL345 / MPU6050 / QMI8658 (via firmware ESP32-S3)
 
 ### Installation
+
+#### 1. Dépendances système (Debian Bookworm / Raspberry Pi OS Lite 64-bit)
+```bash
+sudo apt update
+sudo apt install -y git python3-pip python3-venv python3-dev build-essential \
+    libgl1 libglib2.0-0 i2c-tools
+```
+
+#### 2. Permissions utilisateur
+```bash
+# Ajouter l'utilisateur bob aux groupes requis pour le matériel
+sudo usermod -aG dialout,i2c,video,gpio bob
+# Se déconnecter/reconnecter pour appliquer les groupes
+```
+
+#### 3. Clonage et environnement virtuel
 ```bash
 cd /home/bob
 git clone [url-du-depot] cockpit-lite-rov
 cd cockpit-lite-rov
 
+# Créer le dossier de logs (requis par le service systemd)
+mkdir -p logs
+
 # Environnement virtuel
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
 
-# Service systemd (démarrage auto)
+# Mise à niveau des outils de build
+pip install --upgrade pip setuptools wheel
+
+# Dépendances Python
+pip install -r requirements.txt
+```
+
+#### 4. Activation du bus I2C
+```bash
+# Activer I2C via raspi-config (si pas déjà fait)
+sudo raspi-config nonint do_i2c 0
+
+# Vérifier la présence de l'ESP32-S3
+sudo i2cdetect -y 1
+```
+
+#### 5. Service systemd (démarrage automatique)
+```bash
 sudo cp bob-rov.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl enable bob-rov.service
+sudo systemctl start bob-rov.service
 ```
 
 ### Démarrage
 ```bash
-# Manuel
+# Manuel (depuis le dossier projet)
 source venv/bin/activate && python main.py
 
-# Service
+# Via le service systemd
 sudo systemctl start bob-rov.service
 sudo systemctl status bob-rov.service
+sudo systemctl restart bob-rov.service   # après mise à jour du code
 ```
+
+> **Note :** Le service systemd utilise l'exécutable Python du venv :
+> `/home/bob/cockpit-lite-rov/venv/bin/python main.py`
 
 ### Accès
 - Interface web : `http://[IP_DU_PI]:8080`
