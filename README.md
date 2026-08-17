@@ -341,7 +341,7 @@ cd /home/bob
 git clone https://github.com/Bobar2019/BOBROV.git cockpit-lite-rov
 cd cockpit-lite-rov
 
-# 3. Environnement virtuel Python & dépendances
+# 3. Environnement virtuel Python
 mkdir -p logs
 python3 -m venv venv
 source venv/bin/activate
@@ -352,17 +352,19 @@ pip install -r requirements.txt
 sudo cp bob-rov.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable bob-rov.service
+sudo systemctl start bob-rov.service
 ```
 
 ### Démarrage
 ```bash
-# Manuel (depuis le dossier projet)
-source venv/bin/activate && python main.py
+# Démarrage manuel
+cd /home/bob/cockpit-lite-rov
+source venv/bin/activate
+python main.py
 
-# Via le service systemd
-sudo systemctl start bob-rov.service
+# Ou gestion via le service systemd
 sudo systemctl status bob-rov.service
-sudo systemctl restart bob-rov.service   # après mise à jour du code
+sudo journalctl -u bob-rov.service -f
 ```
 
 ### Accès
