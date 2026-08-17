@@ -325,61 +325,33 @@ Bascule entre vue écran classique et mode stéréoscopique lunettes FPV via le 
 - Raspberry Pi 5
 - Raspberry Pi OS Lite 64-bit
 - Python 3.11+
-- Caméra USB compatible
-- ESP32-S3 (firmware IMU + contrôle PWM, voir `I2C_ESP32_PROTOCOL.md`)
-- IMU supportée : ADXL345 / MPU6050 / QMI8658 (via firmware ESP32-S3)
+- Caméra compatible USB
+- IMU I2C (ADXL345 / MPU6050 / QMI8658 via ESP32-S3)
+
+---
 
 ### Installation
 
-#### 1. Dépendances système (Debian Bookworm / Raspberry Pi OS Lite 64-bit)
 ```bash
-sudo apt update
-sudo apt install -y git python3-pip python3-venv python3-dev build-essential \
-    libgl1 libglib2.0-0 i2c-tools
-```
+# 1. Dépendances système obligatoires
+sudo apt update && sudo apt install -y git python3-pip python3-venv python3-dev build-essential libgl1 libglib2.0-0 i2c-tools
 
-#### 2. Permissions utilisateur
-```bash
-# Ajouter l'utilisateur bob aux groupes requis pour le matériel
-sudo usermod -aG dialout,i2c,video,gpio bob
-# Se déconnecter/reconnecter pour appliquer les groupes
-```
-
-#### 3. Clonage et environnement virtuel
-```bash
+# 2. Cloner le projet
 cd /home/bob
-git clone [url-du-depot] cockpit-lite-rov
+git clone https://github.com/Bobar2019/BOBROV.git cockpit-lite-rov
 cd cockpit-lite-rov
 
-# Créer le dossier de logs (requis par le service systemd)
+# 3. Environnement virtuel Python & dépendances
 mkdir -p logs
-
-# Environnement virtuel
 python3 -m venv venv
 source venv/bin/activate
-
-# Mise à niveau des outils de build
-pip install --upgrade pip setuptools wheel
-
-# Dépendances Python
+pip install --upgrade pip
 pip install -r requirements.txt
-```
 
-#### 4. Activation du bus I2C
-```bash
-# Activer I2C via raspi-config (si pas déjà fait)
-sudo raspi-config nonint do_i2c 0
-
-# Vérifier la présence de l'ESP32-S3
-sudo i2cdetect -y 1
-```
-
-#### 5. Service systemd (démarrage automatique)
-```bash
+# 4. Service systemd (démarrage automatique)
 sudo cp bob-rov.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable bob-rov.service
-sudo systemctl start bob-rov.service
 ```
 
 ### Démarrage
@@ -392,9 +364,6 @@ sudo systemctl start bob-rov.service
 sudo systemctl status bob-rov.service
 sudo systemctl restart bob-rov.service   # après mise à jour du code
 ```
-
-> **Note :** Le service systemd utilise l'exécutable Python du venv :
-> `/home/bob/cockpit-lite-rov/venv/bin/python main.py`
 
 ### Accès
 - Interface web : `http://[IP_DU_PI]:8080`
