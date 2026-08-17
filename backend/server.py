@@ -1866,8 +1866,9 @@ class WebServer:
         except Exception as e:
             logger.warning(f"Commande WebSocket invalide: {msg} — {e}")
 
-    def run(self, host: str = "0.0.0.0", port: int = 8080):
-        """Lance le serveur avec uvicorn"""
+    def run(self, host: str = "0.0.0.0", port: int = 8080, reload: bool = False):
+        """Lance le serveur avec uvicorn.
+        Si reload=True, active le hot-reload pour le développement."""
         import uvicorn
         log_level = self.config.get('SERVER', 'log_level', 'INFO')
         if isinstance(log_level, str):
@@ -1876,7 +1877,27 @@ class WebServer:
             log_level = 'info'
 
         logger.info(f"Démarrage sur http://{host}:{port}")
-        uvicorn.run(
-            self.app, host=host, port=port,
-            log_level=log_level, access_log=False
-        )
+        if reload:
+            logger.info("🔥 Hot-reload activé — redémarrage auto sur changement .py")
+            uvicorn.run(
+                "backend.server:create_app", factory=True,
+                host=host, port=port,
+                log_level=log_level, access_log=False,
+                reload=True, reload_dirs=["backend", "main.py"]
+            )
+        else:
+            uvicorn.run(
+                self.app, host=host, port=port,
+                log_level=log_level, access_log=False
+            )
+
+
+# ── Factory pour le hot-reload uvicorn ────────────────────────────────────────
+# Appelée par uvicorn.run("backend.server:create_app", factory=True, reload=True)
+# Crée une nouvelle instance WebServer à chaque rechargement de code.
+def create_app():
+    """Factory FastAPI pour le mode --reload d'uvicorn."""
+    import os
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.txt')
+    server = WebServer(config_path)
+    return server.app

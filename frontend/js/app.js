@@ -52,6 +52,8 @@ const App = (() => {
             // Forcer un scan immédiat de la manette à l'activation du Cockpit
             // (corrige le cas où gamepadconnected n'est pas déclenché par le navigateur)
             if (typeof Gamepad !== 'undefined') Gamepad.onCockpitActivate();
+            // Vérifier la connexion I2C à chaque ouverture du Cockpit
+            checkI2CConnection();
         }
         // Démarrer l'OSD canvas vectoriel pour cockpit ET config OSD (aperçu en direct)
         if (tileId === 'cockpit' || tileId === 'config-osd') {
@@ -1491,7 +1493,7 @@ const App = (() => {
         _panelCollapsed = !_panelCollapsed;
         layout.classList.toggle('panel-collapsed', _panelCollapsed);
         if (btn) {
-            btn.textContent = _panelCollapsed ? '▶' : '◀';
+            btn.textContent = _panelCollapsed ? '◀' : '▶';
             btn.classList.toggle('collapsed', _panelCollapsed);
             btn.title = _panelCollapsed ? 'Afficher le panneau (F)' : 'Masquer le panneau (F)';
         }
@@ -1529,9 +1531,6 @@ const App = (() => {
         if (typeof ActionStatus !== 'undefined') {
             ActionStatus.load();
         }
-
-        // Vérifier la connexion I2C au démarrage
-        checkI2CConnection();
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

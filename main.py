@@ -114,6 +114,10 @@ Exemples:
         '-v', '--verbose', action='store_true',
         help='Activer le mode debug (équivalent à --log-level DEBUG)'
     )
+    parser.add_argument(
+        '--reload', action='store_true',
+        help='Hot-reload : redémarre auto sur changement de code .py (dev)'
+    )
 
     return parser.parse_args()
 
@@ -189,7 +193,7 @@ def main():
             logger.info("Mode capteurs RÉELS activé (I2C/UART)")
 
         # Lancer le serveur
-        server.run(host=host, port=port)
+        server.run(host=host, port=port, reload=args.reload)
 
     except KeyboardInterrupt:
         logger.info("\nArrêt demandé par l'utilisateur (Ctrl+C)")
